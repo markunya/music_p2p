@@ -3,6 +3,7 @@ import torch.nn.functional as F
 import random
 from loguru import logger
 from tqdm import tqdm
+from controllers import AttentionControl
 from typing import List, Union, Dict, Tuple, Optional
 from p2p_utils import get_time_words_attention_alpha
 from abc import ABC, abstractmethod
@@ -32,8 +33,17 @@ from acestep.schedulers.scheduling_flow_match_pingpong import (
 )
 
 class BaseAceStepP2PEditPipeline(ACEStepPipeline, ABC):
-    def __init__(self, checkpoint_dir, controller_cls, dtype="bfloat16",):
-        super().__init__(checkpoint_dir)
+    def __init__(
+            self,
+            checkpoint_dir,
+            controller_cls,
+            blocks_to_inject_idxs=None,
+            dtype="bfloat16"
+        ):
+        super().__init__(
+            checkpoint_dir,
+            dtype=dtype
+        )
         self.controller_cls = controller_cls
 
         if not self.loaded:
@@ -43,18 +53,28 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline, ABC):
             else:
                 self.load_checkpoint(self.checkpoint_dir)
 
+        self.blocks_to_inject_idxs = blocks_to_inject_idxs
+        if self.blocks_to_inject_idxs is None:
+            self.blocks_to_inject_idxs = list(range(24))
+
     def register_controller(self, controller):
-        for block in self.ace_step_transformer.transformer_blocks:
+        for i in self.blocks_to_inject_idxs:
+            block = self.ace_step_transformer.transformer_blocks[i]
             block.cross_attn.set_processor(
                 CustomerAttnProcessorWithP2PController2_0(controller)
             )
 
-    def set_step_to_controller(self, step):
-        for block in self.ace_step_transformer.transformer_blocks:
-            block.cross_attn.processor.controller.step = step
+    def get_controller(self) -> AttentionControl:
+        idx = self.blocks_to_inject_idxs[0]
+        block = self.ace_step_transformer.transformer_blocks[idx]
+        return block.cross_attn.processor.controller
+
+    def set_diffusion_step_to_controller(self, step):
+        self.get_controller().set_diffusion_step(step)
 
     def unregister_controller(self):
-        for block in self.ace_step_transformer.transformer_blocks:
+        for i in self.blocks_to_inject_idxs:
+            block = self.ace_step_transformer.transformer_blocks[i]
             block.cross_attn.set_processor(CustomerAttnProcessor2_0())
 
     @cpu_offload("ace_step_transformer")
@@ -285,7 +305,6 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline, ABC):
         for i, t in tqdm(enumerate(timesteps), total=num_inference_steps):
             # expand the latents if we are doing classifier free guidance
             latents = target_latents
-            self.set_step_to_controller(i)
 
             is_in_guidance_interval = start_idx <= i < end_idx
             if is_in_guidance_interval and do_classifier_free_guidance:
@@ -407,6 +426,9 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline, ABC):
                 omega=omega_scale,
                 generator=random_generators[0],
             )[0]
+
+            self.set_diffusion_step_to_controller(i+1)
+            target_latents = self.get_controller().step_callback(target_latents)
 
         return target_latents
     
@@ -531,15 +553,65 @@ class LyricsP2PEditPipeline(BaseAceStepP2PEditPipeline):
             self,
             checkpoint_dir,
             controller_cls,
+            blocks_to_inject_idxs: List[int] = None,
             dtype="bfloat16",
         ):
-        super().__init__(checkpoint_dir, controller_cls, dtype)
+        super().__init__(
+            checkpoint_dir,
+            controller_cls,
+            blocks_to_inject_idxs, 
+            dtype
+        )
 
     def __call__(
         self,
         src_lyrics: str,
         tgt_lyrics: List[str],
         genre_tags: str,
+        duration: float = -1,
+        guidance_scale: float = 15.0,
+        infer_steps=60,
+        scheduler_type: str = "euler",
+        save_path: Optional[str] = None,
+        controller_kwargs: Optional[Dict] = None
+    ):
+        if controller_kwargs is None:
+            controller_kwargs = {}
+
+        controller = self.controller_cls(**controller_kwargs)
+        self.register_controller(controller)
+        output_paths = self.forward(
+            audio_duration=duration,
+            infer_step=infer_steps,
+            prompts=[genre_tags for _ in range(len(tgt_lyrics) + 1)],
+            lyrics=[src_lyrics] + tgt_lyrics,
+            scheduler_type=scheduler_type,
+            guidance_scale=guidance_scale,
+            save_path=save_path,
+        )
+        self.unregister_controller()
+        return output_paths
+
+class TagsP2PEditPipeline(BaseAceStepP2PEditPipeline):
+    def __init__(
+            self,
+            checkpoint_dir,
+            controller_cls,
+            blocks_to_inject_idxs: List[int] = None,
+            dtype="bfloat16",
+        ):
+        super().__init__(
+            checkpoint_dir,
+            controller_cls,
+            blocks_to_inject_idxs,
+            dtype
+        )
+
+    def __call__(
+        self,
+        src_tags: str,
+        tgt_tags: List[str],
+        lyrics: str,
         duration: float = -1,
         src_audio_path: str = None,
         cross_replace_steps: Union[float, Dict[str, Tuple[float, float]]] = 1.0,
@@ -557,8 +629,8 @@ class LyricsP2PEditPipeline(BaseAceStepP2PEditPipeline):
         output_paths = self.forward(
             audio_duration=duration,
             infer_step=infer_steps,
-            prompts=[genre_tags for _ in range(len(tgt_lyrics) + 1)],
-            lyrics=[src_lyrics] + tgt_lyrics,
+            prompts=[src_tags] + tgt_tags,
+            lyrics=[lyrics for _ in range(len(tgt_tags) + 1)],
             scheduler_type=scheduler_type,
             guidance_scale=guidance_scale,
             save_path=save_path,
