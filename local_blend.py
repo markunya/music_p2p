@@ -17,41 +17,44 @@ class LyricsLocalBlendTimeOnly(LocalBlend):
             self,
             lyrics_len: int,
             threshold: float = 0.4,
-            pool_k: int = 11,
-            start_diffusion_step: int = 40
+            pool_k: int = 3,
+            start_diffusion_step: int = 50,
+            mask: List[int] = None
         ):
         self.lyrics_len = int(lyrics_len)
         self.threshold = threshold
         self.pool_k = pool_k
         self.start_diffusion_step = start_diffusion_step
+        self.mask = mask
 
     @torch.no_grad()
     def __call__(self, x_t: torch.Tensor, attention_store, diffusion_step: int):
-        if diffusion_step < self.start_diffusion_step:
+        if self.mask is None:
             return x_t
-        deep_maps = [m for m in attention_store[len(attention_store)//2:] if m is not None]
-        if not deep_maps:
-            return x_t
+        # deep_maps = [m for m in attention_store[-5:] if m is not None]
+        # if not deep_maps:
+        #     return x_t
 
-        maps = torch.cat(deep_maps, dim=1)[0]
-        maps = maps.max(dim=0).values
+        # maps = torch.cat(deep_maps, dim=1)[0]
+        # maps = maps.max(dim=0).values
 
-        N = maps.shape[-1]
-        lyr_len = min(self.lyrics_len, N)
+        # N = maps.shape[-1]
+        # lyr_len = min(self.lyrics_len, N)
 
-        base = maps[:, N-lyr_len:N].mean(dim=-1)
-        p10 = torch.quantile(base, 0.10, dim=-1 if base.dim()==2 else 0, keepdim=True)
-        p90 = torch.quantile(base, 0.90, dim=-1 if base.dim()==2 else 0, keepdim=True)
-        base = ((base - p10) / (p90 - p10 + 1e-6)).clamp(0, 1)
-        mask = (base >= self.threshold).float()
-        mask = F.max_pool1d(
-            mask.unsqueeze(1),
-            kernel_size=self.pool_k,
-            stride=1,
-            padding=self.pool_k // 2
-        ).squeeze(1)
-        print(mask)
+        # base = maps[:, N-lyr_len:N].mean(dim=-1)
+        # p10 = torch.quantile(base, 0.10, dim=-1 if base.dim()==2 else 0, keepdim=True)
+        # p90 = torch.quantile(base, 0.90, dim=-1 if base.dim()==2 else 0, keepdim=True)
+        # mask = ((base - p10) / (p90 - p10 + 1e-6)).clamp(0, 1)
+        # mask = F.avg_pool1d(
+        #     mask.unsqueeze(0),
+        #     kernel_size=17,
+        #     padding=8,
+        #     stride=1
+        # ).squeeze(0)
+        # mask = (mask >= 0.5).float()
 
         x_ref = x_t[:1]
-        return x_ref + mask * (x_t - x_ref)
+        if isinstance(self.mask, list):
+            self.mask = torch.tensor(self.mask, device=x_t.device)
+        return x_ref + self.mask * (x_t - x_ref)
 

@@ -30,10 +30,6 @@ class AttentionControl(abc.ABC):
     ):
         self._diffusion_step = 0  # must be set externally at each step through set_diffusion_step
         self.num_diffusion_steps = num_diffusion_steps
-
-class EmptyControl(AttentionControl):
-    def forward (self, attn_weight):
-        return attn_weight
     
 class AttentionStore(AttentionControl):
     def forward(self, attn_weight):
@@ -55,15 +51,22 @@ class AttentionStore(AttentionControl):
         self.step_store = []
         self.attention_store = []
 
+    def step_callback(self, x_t):
+        if self.local_blend is not None:
+            x_t = self.local_blend(x_t, self.attention_store, self._diffusion_step)
+        return x_t
+
     def __init__(
             self,
             num_diffusion_steps: int,
+            local_blend: Optional[LocalBlend] = None,
             running_mean_coef: float = 0.8
     ):
         super().__init__(num_diffusion_steps)
         self.step_store = []
         self.attention_store = []
         self.running_mean_coef = running_mean_coef
+        self.local_blend = local_blend
 
 class AttentionControlEdit(AttentionStore, abc.ABC):
     def __init__(
@@ -72,15 +75,9 @@ class AttentionControlEdit(AttentionStore, abc.ABC):
         num_diffusion_steps: int,
         local_blend: Optional[LocalBlend] = None
     ):
-        super().__init__(num_diffusion_steps)
+        super().__init__(num_diffusion_steps, local_blend)
         # batch_size = number of prompts (src + targets)
         self.batch_size = len(prompts)
-        self.local_blend = local_blend
-
-    def step_callback(self, x_t):
-        if self.local_blend is not None:
-            x_t = self.local_blend(x_t, self.attention_store, self._diffusion_step)
-        return x_t
 
     @abc.abstractmethod
     def replace_cross_attention(self, attn_weight_base, attn_weight_replace):
