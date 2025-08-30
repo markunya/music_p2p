@@ -5,7 +5,6 @@ from loguru import logger
 from tqdm import tqdm
 from controllers import AttentionControl
 from typing import List, Union, Dict, Tuple, Optional
-from p2p_utils import get_time_words_attention_alpha
 from abc import ABC, abstractmethod
 from acestep.pipeline_ace_step import ACEStepPipeline
 from attention_processor import CustomerAttnProcessorWithP2PController2_0
@@ -36,7 +35,7 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline, ABC):
     def __init__(
             self,
             checkpoint_dir,
-            controller_cls,
+            controller: AttentionControl = None,
             blocks_to_inject_idxs=None,
             dtype="bfloat16"
         ):
@@ -44,7 +43,7 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline, ABC):
             checkpoint_dir,
             dtype=dtype
         )
-        self.controller_cls = controller_cls
+        self.controller: AttentionControl = controller
 
         if not self.loaded:
             logger.warning("Checkpoint not loaded, loading checkpoint...")
@@ -57,20 +56,15 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline, ABC):
         if self.blocks_to_inject_idxs is None:
             self.blocks_to_inject_idxs = list(range(24))
 
-    def register_controller(self, controller):
+    def register_controller(self):
         for i in self.blocks_to_inject_idxs:
             block = self.ace_step_transformer.transformer_blocks[i]
             block.cross_attn.set_processor(
-                CustomerAttnProcessorWithP2PController2_0(controller)
+                CustomerAttnProcessorWithP2PController2_0(self.controller)
             )
 
-    def get_controller(self) -> AttentionControl:
-        idx = self.blocks_to_inject_idxs[0]
-        block = self.ace_step_transformer.transformer_blocks[idx]
-        return block.cross_attn.processor.controller
-
     def set_diffusion_step_to_controller(self, step):
-        self.get_controller().set_diffusion_step(step)
+        self.controller.set_diffusion_step(step)
 
     def unregister_controller(self):
         for i in self.blocks_to_inject_idxs:
@@ -327,6 +321,8 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline, ABC):
                 timestep = t.expand(latent_model_input.shape[0])
                 output_length = latent_model_input.shape[-1]
                 # P(x|speaker, text, lyric)
+
+                self.register_controller()
                 noise_pred_with_cond = self.ace_step_transformer.decode(
                     hidden_states=latent_model_input,
                     attention_mask=attention_mask,
@@ -335,6 +331,8 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline, ABC):
                     output_length=output_length,
                     timestep=timestep,
                 ).sample
+                self.unregister_controller()
+
 
                 noise_pred_with_only_text_cond = None
                 if (
@@ -409,6 +407,8 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline, ABC):
             else:
                 latent_model_input = latents
                 timestep = t.expand(latent_model_input.shape[0])
+
+                self.register_controller()
                 noise_pred = self.ace_step_transformer.decode(
                     hidden_states=latent_model_input,
                     attention_mask=attention_mask,
@@ -417,6 +417,7 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline, ABC):
                     output_length=latent_model_input.shape[-1],
                     timestep=timestep,
                 ).sample
+                self.unregister_controller()
 
             target_latents = scheduler.step(
                 model_output=noise_pred,
@@ -428,7 +429,7 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline, ABC):
             )[0]
 
             self.set_diffusion_step_to_controller(i+1)
-            target_latents = self.get_controller().step_callback(target_latents)
+            target_latents = self.controller.step_callback(target_latents)
 
         return target_latents
     
@@ -552,13 +553,13 @@ class LyricsP2PEditPipeline(BaseAceStepP2PEditPipeline):
     def __init__(
             self,
             checkpoint_dir,
-            controller_cls,
+            controller: AttentionControl = None,
             blocks_to_inject_idxs: List[int] = None,
             dtype="bfloat16",
         ):
         super().__init__(
             checkpoint_dir,
-            controller_cls,
+            controller,
             blocks_to_inject_idxs, 
             dtype
         )
@@ -572,14 +573,8 @@ class LyricsP2PEditPipeline(BaseAceStepP2PEditPipeline):
         guidance_scale: float = 15.0,
         infer_steps=60,
         scheduler_type: str = "euler",
-        save_path: Optional[str] = None,
-        controller_kwargs: Optional[Dict] = None
+        save_path: Optional[str] = None
     ):
-        if controller_kwargs is None:
-            controller_kwargs = {}
-
-        controller = self.controller_cls(**controller_kwargs)
-        self.register_controller(controller)
         output_paths = self.forward(
             audio_duration=duration,
             infer_step=infer_steps,
@@ -589,20 +584,19 @@ class LyricsP2PEditPipeline(BaseAceStepP2PEditPipeline):
             guidance_scale=guidance_scale,
             save_path=save_path,
         )
-        self.unregister_controller()
         return output_paths
 
 class TagsP2PEditPipeline(BaseAceStepP2PEditPipeline):
     def __init__(
             self,
             checkpoint_dir,
-            controller_cls,
+            controller: AttentionControl = None,
             blocks_to_inject_idxs: List[int] = None,
             dtype="bfloat16",
         ):
         super().__init__(
             checkpoint_dir,
-            controller_cls,
+            controller,
             blocks_to_inject_idxs,
             dtype
         )
@@ -613,19 +607,11 @@ class TagsP2PEditPipeline(BaseAceStepP2PEditPipeline):
         tgt_tags: List[str],
         lyrics: str,
         duration: float = -1,
-        src_audio_path: str = None,
-        cross_replace_steps: Union[float, Dict[str, Tuple[float, float]]] = 1.0,
         guidance_scale: float = 15.0,
         infer_steps=60,
         scheduler_type: str = "euler",
-        save_path: Optional[str] = None,
-        controller_kwargs: Optional[Dict] = None
+        save_path: Optional[str] = None
     ):
-        if controller_kwargs is None:
-            controller_kwargs = {}
-
-        controller = self.controller_cls(**controller_kwargs)
-        self.register_controller(controller)
         output_paths = self.forward(
             audio_duration=duration,
             infer_step=infer_steps,
@@ -635,6 +621,5 @@ class TagsP2PEditPipeline(BaseAceStepP2PEditPipeline):
             guidance_scale=guidance_scale,
             save_path=save_path,
         )
-        self.unregister_controller()
         return output_paths
 

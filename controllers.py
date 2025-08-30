@@ -3,7 +3,9 @@ import torch
 import seq_aligner
 from typing import Union, Tuple, Optional, Dict
 import math
-from local_blend import LocalBlend
+from step_callback import StepCallbackBase
+
+from tqdm import tqdm
 
 class AttentionControl(abc.ABC):
     def step_callback(self, x_t):
@@ -52,30 +54,30 @@ class AttentionStore(AttentionControl):
         self.attention_store = []
 
     def step_callback(self, x_t):
-        if self.local_blend is not None:
-            x_t = self.local_blend(x_t, self.attention_store, self._diffusion_step)
+        if self.step_callback_ is not None:
+            x_t = self.step_callback_(x_t, self.attention_store, self._diffusion_step)
         return x_t
 
     def __init__(
             self,
             num_diffusion_steps: int,
-            local_blend: Optional[LocalBlend] = None,
+            step_callback: Optional[StepCallbackBase] = None,
             running_mean_coef: float = 0.8
     ):
         super().__init__(num_diffusion_steps)
         self.step_store = []
         self.attention_store = []
         self.running_mean_coef = running_mean_coef
-        self.local_blend = local_blend
+        self.step_callback_ = step_callback
 
 class AttentionControlEdit(AttentionStore, abc.ABC):
     def __init__(
         self,
         prompts,
         num_diffusion_steps: int,
-        local_blend: Optional[LocalBlend] = None
+        step_callback: Optional[StepCallbackBase] = None
     ):
-        super().__init__(num_diffusion_steps, local_blend)
+        super().__init__(num_diffusion_steps, step_callback)
         # batch_size = number of prompts (src + targets)
         self.batch_size = len(prompts)
 
@@ -99,14 +101,14 @@ class AttentionControlReplace(AttentionControlEdit, abc.ABC):
         prompts,
         tokenizer,
         num_diffusion_steps: int,
-        local_blend: Optional[LocalBlend] = None,
+        step_callback: Optional[StepCallbackBase] = None,
         eta_min: float = 0.0,
         eta_max: float = 1.0,
         diffusion_step_start: Optional[int] = None,
         diffusion_step_end: Optional[int] = None,
     ):
-        super().__init__(prompts, num_diffusion_steps, local_blend)
-        self.mapper = self._get_replacement_mapper(prompts, tokenizer)
+        super().__init__(prompts, num_diffusion_steps, step_callback)
+        self.mapper, self.edit_mask = self._get_replacement_mapper(prompts, tokenizer)
 
         self.eta_min = eta_min
         self.eta_max = eta_max
@@ -135,16 +137,17 @@ class AttentionControlReplace(AttentionControlEdit, abc.ABC):
         M_full = attn_weight_replace.new_zeros((self.batch_size - 1, len_src_seq, len_tgt_seq))
         idx = torch.arange(min(len_src_seq, len_tgt_seq), device=M_full.device)
         M_full[:, idx, idx] = 1.0
-
         M_full[:, 
                mapper_pos_src : mapper_pos_src + self.mapper.shape[-2],
                mapper_pos_tgt : mapper_pos_tgt + self.mapper.shape[-1]] = self.mapper
+        
+        edit_mask_full = torch.zeros(M_full.shape[0], M_full.shape[-1], device=M_full.device)
+        edit_mask_full[:,mapper_pos_tgt:mapper_pos_tgt + self.edit_mask.shape[-1]] = self.edit_mask
 
-        attn_weight_replaced = torch.einsum('hpw,bwn->bhpn', attn_weight_base, M_full)
-
+        attn_weight_base_mapped = torch.einsum('hpw,bwn->bhpn', attn_weight_base, M_full)
         alpha = self._get_alpha_from_cosine_schedule()
-        return alpha * attn_weight_replaced + (1 - alpha) * attn_weight_base
-
+        interpolation = alpha * attn_weight_replace + (1 - alpha) * attn_weight_base_mapped
+        return interpolation * edit_mask_full + attn_weight_base_mapped * (1 - edit_mask_full)
     
     @abc.abstractmethod
     def _get_replacement_mapper(self, prompts, tokenizer):
@@ -152,7 +155,7 @@ class AttentionControlReplace(AttentionControlEdit, abc.ABC):
 
 class AttentionReplaceLyrics(AttentionControlReplace):
     def _get_replacement_mapper(self, prompts, tokenizer):
-        return seq_aligner.get_replacement_mapper(prompts, tokenizer)
+        return seq_aligner.get_lyrics_replacement_mapper(prompts)
 
     def replace_cross_attention(self, attn_weight_base, attn_weight_replace):
         mapper_pos_src = attn_weight_base.shape[-1] - self.mapper.shape[-2]
@@ -166,7 +169,7 @@ class AttentionReplaceLyrics(AttentionControlReplace):
 
 class AttentionReplaceTags(AttentionControlReplace):    
     def _get_replacement_mapper(self, prompts, tokenizer):
-        return seq_aligner.get_replacement_mapper(prompts, tokenizer)
+        return seq_aligner.get_tags_replacement_mapper(prompts, tokenizer)
 
     def replace_cross_attention(self, attn_weight_base, attn_weight_replace):
         return self._replace_cross_attention_impl(

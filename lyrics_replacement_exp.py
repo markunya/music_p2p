@@ -3,12 +3,12 @@ import torch
 import random
 import numpy as np
 from typing import List
-from local_blend import LyricsLocalBlendTimeOnly
 from dataclasses import dataclass
 from controllers import AttentionReplaceLyrics, AttentionReplaceTags, AttentionStore
 from pipeline import LyricsP2PEditPipeline, TagsP2PEditPipeline
 from acestep.models.lyrics_utils.lyric_tokenizer import VoiceBpeTokenizer
 from seq_aligner import tokenize_lyrics
+from step_callback import SkipSteps
 
 def setup_seed(seed):
     random.seed(seed)                
@@ -51,15 +51,16 @@ LYRICS_EXP_PARAMS_LIST = \
         tgt_lyrics="Prancing with desire, it’s burning through my soul!",
         tags="pop, dance pop, energetic, catchy, synths, upbeat, female vocal, lively",
         seed=3,
-        mask=[0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
-            0., 0., 0., 0., 0., 0., 0., 0., 0., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
-            1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
-            1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
-            1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
-            1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
-            0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
-            0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
-            0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]
+        mask=None
+        # mask=[0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
+        #     0., 0., 0., 0., 0., 0., 0., 0., 0., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
+        #     1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
+        #     1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
+        #     1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
+        #     1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
+        #     0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
+        #     0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
+        #     0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]
     ),
     # LyricsExpParams(
     #     identifier="electro_house",
@@ -81,15 +82,16 @@ LYRICS_EXP_PARAMS_LIST = \
         tgt_lyrics="Crying from the gun, I question what it's worth!",
         tags="synthwave, retro wave, 80s synths, analog sounds, spacey, nostalgic, futuristic",
         seed=6,
-        mask=[0., 0., 0., 0., 0., 0., 0., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
-            1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
-            1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
-            1., 0., 0., 0., 0., 0., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
-            1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
-            1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
-            1., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
-            0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
-            0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 1.]
+        mask=None
+        # mask=[0., 0., 0., 0., 0., 0., 0., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
+        #     1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
+        #     1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
+        #     1., 0., 0., 0., 0., 0., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
+        #     1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
+        #     1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
+        #     1., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
+        #     0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
+        #     0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 1.]
     ),
     # LyricsExpParams(
     #     identifier="punk_rock",
@@ -118,15 +120,16 @@ LYRICS_EXP_PARAMS_LIST = \
         tgt_lyrics="Swerving from the wave, I rewrite destiny!",
         tags="psytrance, trance, progressive, high bpm, driving bassline, hypnotic, euphoric, tribal elements",
         seed=10,
-        mask=[1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
-                1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
-                1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
-                1., 1., 1., 1., 1., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
-                0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
-                0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
-                0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
-                0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
-                0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]
+        mask=None
+        # mask=[1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
+        #         1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
+        #         1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
+        #         1., 1., 1., 1., 1., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
+        #         0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
+        #         0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
+        #         0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
+        #         0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
+        #         0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]
     ),
 ]
 
@@ -143,11 +146,13 @@ LONG_LYRICS_EXP_PARAMS_LIST=\
 ]
 
 EXPERIMENT_INJECTION_CONFIGS = {
+    "only_zero": [0],
+    "full": list(range(24)),
     # "second_half": list(range(12, 24)),
     # "late_only": list(range(18, 24)),
     # "sparse_4_fh": [10, 15, 20, 23],
     # "center_4": [10, 11, 12, 13],
-    # "center_6": [9, 10, 11, 12, 13, 14],
+    "center_6": [9, 10, 11, 12, 13, 14],
     # "center_4_+sparse": [10, 11, 12, 13, 16, 19, 22],
     # "quarter_3": [12, 13, 14, 15, 16, 17],
     # "quarter_4": [18, 19, 20, 21, 22, 23],
@@ -157,15 +162,12 @@ EXPERIMENT_INJECTION_CONFIGS = {
     # "sparse_middlev3": [10, 12],
     # "sparse_middlev4": [6, 9, 12],
     # "sparse_more_early": [7, 9],
-    "no_injection": [0]
+    "no_injection": []
 }
 
 def main():
-    tokenizer = VoiceBpeTokenizer()
-
     pipe = LyricsP2PEditPipeline(
         '../ACE_CHECKPOINTS',
-        AttentionStore,
         blocks_to_inject_idxs=None,
         dtype='float32'
     )
@@ -175,25 +177,27 @@ def main():
 
         pipe.blocks_to_inject_idxs = block_idxs
 
-        for lyrics_param in LONG_LYRICS_EXP_PARAMS_LIST:
+        for lyrics_param in LYRICS_EXP_PARAMS_LIST:
             setup_seed(lyrics_param.seed)
 
-            output_dir = os.path.join("outputs", exp_name, lyrics_param.identifier)
+            output_dir = os.path.join("outputs_lyrics", exp_name, lyrics_param.identifier)
             os.makedirs(output_dir, exist_ok=True)
-            
-            lyrics_len = len(tokenize_lyrics(lyrics_param.src_lyrics, tokenizer))
+
+            controller = AttentionReplaceLyrics(
+                prompts=[lyrics_param.src_lyrics, lyrics_param.tgt_lyrics],
+                tokenizer=VoiceBpeTokenizer(),
+                step_callback=None,
+                num_diffusion_steps=60,
+                diffusion_step_start=1,
+                diffusion_step_end=30
+            )
+            pipe.controller = controller
 
             output_paths = pipe(
                 src_lyrics=lyrics_param.src_lyrics,
                 tgt_lyrics=[lyrics_param.tgt_lyrics],
                 genre_tags=lyrics_param.tags,
-                duration=60,
-                controller_kwargs={
-                    # 'prompts': [lyrics_param.src_lyrics, lyrics_param.tgt_lyrics],
-                    # 'tokenizer': tokenizer,
-                    'num_diffusion_steps': 60,
-                    'local_blend': LyricsLocalBlendTimeOnly(lyrics_len, mask=lyrics_param.mask)
-                },
+                duration=20,
                 save_path=output_dir,
             )
 

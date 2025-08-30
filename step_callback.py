@@ -3,16 +3,28 @@ import torch
 import torch.nn.functional as F
 from typing import List
 
-class LocalBlend(abc.ABC):
+class StepCallbackBase(abc.ABC):
     @abc.abstractmethod
     def __call__(
         self,
         x_t: torch.Tensor,
-        attention_store: List[torch.Tensor]
+        attention_store: List[torch.Tensor],
+        diffusion_step: int
     ):
         raise NotImplementedError
+    
+class SkipSteps:
+    def __init__(self, skip_steps_num: int):
+        self.skip_steps_num = int(skip_steps_num)
 
-class LyricsLocalBlendTimeOnly(LocalBlend):
+    @torch.no_grad()
+    def __call__(self, x_t: torch.Tensor, attention_store, diffusion_step: int) -> torch.Tensor:
+        if diffusion_step < self.skip_steps_num:
+            ref = x_t[:1]
+            return ref.expand_as(x_t)
+        return x_t
+
+class LyricsLocalBlendTimeOnly(StepCallbackBase):
     def __init__(
             self,
             lyrics_len: int,
