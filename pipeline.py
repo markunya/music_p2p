@@ -92,12 +92,9 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline, ABC):
         guidance_interval=0.5,
         guidance_interval_decay=1.0,
         min_guidance_scale=3.0,
-        oss_steps=[],
         encoder_text_hidden_states_null=None,
         use_erg_lyric=False,
         use_erg_diffusion=False,
-        guidance_scale_text=0.0,
-        guidance_scale_lyric=0.0,
     ):
 
         logger.info(
@@ -108,22 +105,6 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline, ABC):
         do_classifier_free_guidance = True
         if guidance_scale == 0.0 or guidance_scale == 1.0:
             do_classifier_free_guidance = False
-
-        do_double_condition_guidance = False
-        if (
-            guidance_scale_text is not None
-            and guidance_scale_text > 1.0
-            and guidance_scale_lyric is not None
-            and guidance_scale_lyric > 1.0
-        ):
-            do_double_condition_guidance = True
-            logger.info(
-                "do_double_condition_guidance: {}, guidance_scale_text: {}, guidance_scale_lyric: {}".format(
-                    do_double_condition_guidance,
-                    guidance_scale_text,
-                    guidance_scale_lyric,
-                )
-            )
 
         bsz = encoder_text_hidden_states.shape[0]
 
@@ -145,36 +126,12 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline, ABC):
 
         frame_length = target_latents.shape[-1]
 
-        if len(oss_steps) > 0:
-            infer_steps = max(oss_steps)
-            scheduler.set_timesteps
-            timesteps, num_inference_steps = retrieve_timesteps(
-                scheduler,
-                num_inference_steps=infer_steps,
-                device=self.device,
-                timesteps=None,
-            )
-            new_timesteps = torch.zeros(len(oss_steps), dtype=self.dtype, device=self.device)
-            for idx in range(len(oss_steps)):
-                new_timesteps[idx] = timesteps[oss_steps[idx] - 1]
-            num_inference_steps = len(oss_steps)
-            sigmas = (new_timesteps / 1000).float().cpu().numpy()
-            timesteps, num_inference_steps = retrieve_timesteps(
-                scheduler,
-                num_inference_steps=num_inference_steps,
-                device=self.device,
-                sigmas=sigmas,
-            )
-            logger.info(
-                f"oss_steps: {oss_steps}, num_inference_steps: {num_inference_steps} after remapping to timesteps {timesteps}"
-            )
-        else:
-            timesteps, num_inference_steps = retrieve_timesteps(
-                scheduler,
-                num_inference_steps=infer_steps,
-                device=self.device,
-                timesteps=None,
-            )
+        timesteps, num_inference_steps = retrieve_timesteps(
+            scheduler,
+            num_inference_steps=infer_steps,
+            device=self.device,
+            timesteps=None,
+        )
 
         attention_mask = torch.ones(bsz, frame_length, device=self.device, dtype=self.dtype)
 
@@ -244,30 +201,6 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline, ABC):
                 lyric_mask,
             )
 
-        encoder_hidden_states_no_lyric = None
-        if do_double_condition_guidance:
-            # P(null_speaker, text, lyric_weaker)
-            if use_erg_lyric:
-                encoder_hidden_states_no_lyric = forward_encoder_with_temperature(
-                    self,
-                    inputs={
-                        "encoder_text_hidden_states": encoder_text_hidden_states,
-                        "text_attention_mask": text_attention_mask,
-                        "speaker_embeds": torch.zeros_like(speaker_embds),
-                        "lyric_token_idx": lyric_token_ids,
-                        "lyric_mask": lyric_mask,
-                    },
-                )
-            # P(null_speaker, text, no_lyric)
-            else:
-                encoder_hidden_states_no_lyric, _ = self.ace_step_transformer.encode(
-                    encoder_text_hidden_states,
-                    text_attention_mask,
-                    torch.zeros_like(speaker_embds),
-                    torch.zeros_like(lyric_token_ids),
-                    lyric_mask,
-                )
-
         def forward_diffusion_with_temperature(
             self, hidden_states, timestep, inputs, tau=0.01, l_min=15, l_max=20
         ):
@@ -333,21 +266,6 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline, ABC):
                 ).sample
                 self.unregister_controller()
 
-
-                noise_pred_with_only_text_cond = None
-                if (
-                    do_double_condition_guidance
-                    and encoder_hidden_states_no_lyric is not None
-                ):
-                    noise_pred_with_only_text_cond = self.ace_step_transformer.decode(
-                        hidden_states=latent_model_input,
-                        attention_mask=attention_mask,
-                        encoder_hidden_states=encoder_hidden_states_no_lyric,
-                        encoder_hidden_mask=encoder_hidden_mask,
-                        output_length=output_length,
-                        timestep=timestep,
-                    ).sample
-
                 if use_erg_diffusion:
                     noise_pred_uncond = forward_diffusion_with_temperature(
                         self,
@@ -370,19 +288,7 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline, ABC):
                         timestep=timestep,
                     ).sample
 
-                if (
-                    do_double_condition_guidance
-                    and noise_pred_with_only_text_cond is not None
-                ):
-                    noise_pred = cfg_double_condition_forward(
-                        cond_output=noise_pred_with_cond,
-                        uncond_output=noise_pred_uncond,
-                        only_text_cond_output=noise_pred_with_only_text_cond,
-                        guidance_scale_text=guidance_scale_text,
-                        guidance_scale_lyric=guidance_scale_lyric,
-                    )
-
-                elif cfg_type == "apg":
+                if cfg_type == "apg":
                     noise_pred = apg_forward(
                         pred_cond=noise_pred_with_cond,
                         pred_uncond=noise_pred_uncond,
@@ -465,9 +371,6 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline, ABC):
         use_erg_tag: bool = True,
         use_erg_lyric: bool = True,
         use_erg_diffusion: bool = True,
-        oss_steps: str = None,
-        guidance_scale_text: float = 0.0,
-        guidance_scale_lyric: float = 0.0,
         lora_name_or_path: str = "none",
         lora_weight: float = 1.0,
         save_path: str = None,
@@ -478,11 +381,6 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline, ABC):
         random_generators, _ = self.set_seeds(bsz)
 
         self.load_lora(lora_name_or_path, lora_weight)
-
-        if isinstance(oss_steps, str) and len(oss_steps) > 0:
-            oss_steps = list(map(int, oss_steps.split(",")))
-        else:
-            oss_steps = []
 
         texts = prompts
         encoder_text_hidden_states, text_attention_mask = self.get_text_embeddings(texts)
@@ -525,12 +423,9 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline, ABC):
                     guidance_interval=guidance_interval,
                     guidance_interval_decay=guidance_interval_decay,
                     min_guidance_scale=min_guidance_scale,
-                    oss_steps=oss_steps,
                     encoder_text_hidden_states_null=encoder_text_hidden_states_null,
                     use_erg_lyric=use_erg_lyric,
                     use_erg_diffusion=use_erg_diffusion,
-                    guidance_scale_text=guidance_scale_text,
-                    guidance_scale_lyric=guidance_scale_lyric,
             )
 
         output_paths = self.latents2audio(
@@ -578,8 +473,8 @@ class LyricsP2PEditPipeline(BaseAceStepP2PEditPipeline):
         output_paths = self.forward(
             audio_duration=duration,
             infer_step=infer_steps,
-            prompts=[genre_tags for _ in range(len(tgt_lyrics) + 1)],
-            lyrics=[src_lyrics] + tgt_lyrics,
+            prompts=[genre_tags for _ in range(2 * len(tgt_lyrics) + 1)],
+            lyrics=[src_lyrics] + tgt_lyrics + tgt_lyrics,
             scheduler_type=scheduler_type,
             guidance_scale=guidance_scale,
             save_path=save_path,
@@ -615,8 +510,8 @@ class TagsP2PEditPipeline(BaseAceStepP2PEditPipeline):
         output_paths = self.forward(
             audio_duration=duration,
             infer_step=infer_steps,
-            prompts=[src_tags] + tgt_tags,
-            lyrics=[lyrics for _ in range(len(tgt_tags) + 1)],
+            prompts=[src_tags] + tgt_tags + tgt_tags,
+            lyrics=[lyrics for _ in range(2 * len(tgt_tags) + 1)],
             scheduler_type=scheduler_type,
             guidance_scale=guidance_scale,
             save_path=save_path,

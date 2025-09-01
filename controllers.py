@@ -88,10 +88,11 @@ class AttentionControlEdit(AttentionStore, abc.ABC):
     def forward(self, attn_weight):
         super().forward(attn_weight)
         base = attn_weight[0]
-        replaces = attn_weight[1:]
+        start_replaces_idx = (attn_weight.shape[0] - 1) // 2 + 1
+        replaces = attn_weight[start_replaces_idx:]
 
         new_replaces = self.replace_cross_attention(base, replaces)
-        attn_weight[1:] = new_replaces
+        attn_weight[start_replaces_idx:] = new_replaces
 
         return attn_weight
     
@@ -146,6 +147,7 @@ class AttentionControlReplace(AttentionControlEdit, abc.ABC):
 
         attn_weight_base_mapped = torch.einsum('hpw,bwn->bhpn', attn_weight_base, M_full)
         alpha = self._get_alpha_from_cosine_schedule()
+
         interpolation = alpha * attn_weight_replace + (1 - alpha) * attn_weight_base_mapped
         return interpolation * edit_mask_full + attn_weight_base_mapped * (1 - edit_mask_full)
     
