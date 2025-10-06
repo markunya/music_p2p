@@ -5,7 +5,7 @@ from difflib import SequenceMatcher
 import re
 from acestep.models.lyrics_utils.lyric_tokenizer import VoiceBpeTokenizer
 from typing import List
-from p2p_utils import is_special_token
+from utils.p2p_utils import is_special_token
 
 structure_pattern = re.compile(r"\[.*?\]")
 lyric_tokenizer = VoiceBpeTokenizer()

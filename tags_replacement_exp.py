@@ -4,9 +4,9 @@ import random
 import numpy as np
 from typing import List
 from dataclasses import dataclass
-from controllers import AttentionReplaceTags
+from music_p2p.p2p.controllers import AttentionReplaceTags
 from pipeline import TagsP2PEditPipeline
-from step_callback import SkipSteps
+from music_p2p.p2p.step_callback import SkipSteps
 
 def setup_seed(seed):
     random.seed(seed)                
@@ -28,13 +28,13 @@ class TagsExpParams:
     
 TAGS_EXP_PARAMS_LIST = \
 [
-    # TagsExpParams(
-    #     identifier="soul",
-    #     lyrics="[verse]\nNeon lights they flicker bright\nCity hums in dead of night\nRhythms pulse through concrete veins\nLost in echoes of refrains\n\n[verse]\nBassline groovin' in my chest\nHeartbeats match the city's zest\nElectric whispers fill the air\nSynthesized dreams everywhere\n\n[chorus]\nTurn it up and let it flow\nFeel the fire let it grow\nIn this rhythm we belong\nHear the night sing out our song",
-    #     src_tags="rock, hip - hop, orchestral, bass, male voice",
-    #     tgt_tags = "phonk, trap, dark, heavy bass, pitched vocals",
-    #     seed=1
-    # ),
+    TagsExpParams(
+        identifier="soul",
+        lyrics="[verse]\nNeon lights they flicker bright\nCity hums in dead of night\nRhythms pulse through concrete veins\nLost in echoes of refrains\n\n[verse]\nBassline groovin' in my chest\nHeartbeats match the city's zest\nElectric whispers fill the air\nSynthesized dreams everywhere\n\n[chorus]\nTurn it up and let it flow\nFeel the fire let it grow\nIn this rhythm we belong\nHear the night sing out our song",
+        src_tags="rock, hip - hop, orchestral, bass, male voice",
+        tgt_tags = "phonk, trap, dark, heavy bass, pitched vocals",
+        seed=1
+    ),
     TagsExpParams(
         identifier="cuba",
         lyrics = "[verse]\nSun dips low the night ignites\nBassline hums with gleaming lights\nElectric guitar singing tales so fine\nIn the rhythm we all intertwine\n\n[verse]\nDrums beat steady calling out\nPercussion guides no room for doubt\nElectric pulse through every vein\nDance away every ounce of pain\n\n[chorus]\nFeel the rhythm feel the flow\nLet the music take control\nBassline deep electric hum\nIn this night we're never numb\n\n[bridge]\nStars above they start to glow\nEchoes of the night's soft glow\nElectric strings weave through the air\nIn this moment none compare\n\n[verse]\nHeartbeats sync with every tone\nLost in music never alone\nElectric tales of love and peace\nIn this groove we find release",
@@ -42,13 +42,13 @@ TAGS_EXP_PARAMS_LIST = \
         tgt_tags="female voice, Latin pop, EDM, sidechain, bright synths, wide chorus",
         seed=11
     ),
-    # TagsExpParams(
-    #     identifier="nightclub",
-    #     lyrics = "Burning in motion, set me alight!\nEvery heartbeat turns into a fight!\nCaged in rhythm, chained in time!\nLove’s a battle— You're Mine!  You're Mine!",
-    #     src_tags="Nightclubs, dance parties, female voice, workout playlists, radio broadcasts",
-    #     tgt_tags="Nightclubs, dance parties, male voice, chill playlists, radio broadcasts",
-    #     seed=12
-    # ),
+    TagsExpParams(
+        identifier="nightclub",
+        lyrics = "Burning in motion, set me alight!\nEvery heartbeat turns into a fight!\nCaged in rhythm, chained in time!\nLove’s a battle— You're Mine!  You're Mine!",
+        src_tags="Nightclubs, dance parties, female voice, workout playlists, radio broadcasts",
+        tgt_tags="Nightclubs, dance parties, male voice, chill playlists, radio broadcasts",
+        seed=12
+    ),
 ]
 
 EXPERIMENT_INJECTION_CONFIGS = {
@@ -61,7 +61,7 @@ EXPERIMENT_INJECTION_CONFIGS = {
     # "center_4_+sparse": [10, 11, 12, 13, 16, 19, 22],
     # "quarter_3": [12, 13, 14, 15, 16, 17],
     # "quarter_4": [18, 19, 20, 21, 22, 23],
-    "quarter_2_3": [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
+    # "quarter_2_3": [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
     # "sparse_middle": [8, 12, 16]
     # "sparse_middlev2": [8, 10, 12],
     # "sparse_middlev3": [10, 12],

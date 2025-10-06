@@ -4,11 +4,11 @@ import random
 import numpy as np
 from typing import List, Optional
 from dataclasses import dataclass
-from controllers import AttentionReplaceLyrics, AttentionReplaceTags, AttentionStore
+from music_p2p.p2p.controllers import AttentionReplaceLyrics, AttentionReplaceTags, AttentionStore
 from pipeline import LyricsP2PEditPipeline, TagsP2PEditPipeline
 from acestep.models.lyrics_utils.lyric_tokenizer import VoiceBpeTokenizer
-from seq_aligner import tokenize_lyrics
-from step_callback import SkipSteps, StepCallbackBase
+from music_p2p.utils.seq_aligner import tokenize_lyrics
+from music_p2p.p2p.step_callback import SkipSteps, StepCallbackBase
 
 def setup_seed(seed):
     random.seed(seed)                
