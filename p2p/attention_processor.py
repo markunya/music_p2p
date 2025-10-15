@@ -4,9 +4,10 @@ import torch.nn.functional as F
 from diffusers.models.attention_processor import Attention
 from acestep.models.customer_attention_processor import CustomerAttnProcessor2_0
 from typing import Optional, Union, Tuple
+from p2p.controllers import AttentionControl
 
 class CustomerAttnProcessorWithP2PController2_0(CustomerAttnProcessor2_0):
-    def __init__(self, controller):
+    def __init__(self, controller: Optional[AttentionControl]):
         super().__init__()
         self.controller = controller
     
@@ -45,7 +46,8 @@ class CustomerAttnProcessorWithP2PController2_0(CustomerAttnProcessor2_0):
         attn_weight += attn_bias
         attn_weight = torch.softmax(attn_weight, dim=-1)
         attn_weight = torch.dropout(attn_weight, dropout_p, train=True)
-        attn_weight = self.controller(attn_weight)
+        if self.controller is not None:
+            attn_weight = self.controller(attn_weight)
 
         return attn_weight @ value
 
