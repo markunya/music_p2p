@@ -207,8 +207,6 @@ marimo/_lsp/
 __marimo__/
 
 *.sbatch
-*.mp3
-*.wav
 logs/
 tester.ipynb
 invert_audio.py
