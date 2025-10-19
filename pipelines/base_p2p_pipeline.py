@@ -1,6 +1,5 @@
 import torch
 import torch.nn.functional as F
-import random
 import utils
 from tqdm import tqdm
 from p2p.controllers import AttentionControl
@@ -11,7 +10,6 @@ from acestep.models.customer_attention_processor import CustomerAttnProcessor2_0
 from diffusers.pipelines.stable_diffusion_3.pipeline_stable_diffusion_3 import (
     retrieve_timesteps,
 )
-from diffusers.utils.torch_utils import randn_tensor
 from acestep.apg_guidance import (
     MomentumBuffer,
 )
@@ -42,6 +40,66 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
         self.blocks_to_inject_idxs = blocks_to_inject_idxs
         if self.blocks_to_inject_idxs is None:
             self.blocks_to_inject_idxs = list(range(24))
+
+    @cpu_offload("text_encoder_model")
+    def get_text_embeddings(self, texts, text_max_length=128):
+        inputs = self.text_tokenizer(
+            texts,
+            return_tensors="pt",
+            padding='max_length',
+            truncation=True,
+            max_length=text_max_length,
+        )
+        inputs = {key: value.to(self.device) for key, value in inputs.items()}
+        if self.text_encoder_model.device != self.device:
+            self.text_encoder_model.to(self.device)
+        with torch.no_grad():
+            outputs = self.text_encoder_model(**inputs)
+            last_hidden_states = outputs.last_hidden_state
+        attention_mask = inputs["attention_mask"]
+        return last_hidden_states, attention_mask
+
+    @cpu_offload("text_encoder_model")
+    def get_text_embeddings_null(
+        self, texts, text_max_length=128, tau=0.01, l_min=8, l_max=10
+    ):
+        inputs = self.text_tokenizer(
+            texts,
+            return_tensors="pt",
+            padding='max_length',
+            truncation=True,
+            max_length=text_max_length,
+        )
+        inputs = {key: value.to(self.device) for key, value in inputs.items()}
+        if self.text_encoder_model.device != self.device:
+            self.text_encoder_model.to(self.device)
+
+        def forward_with_temperature(inputs, tau=0.01, l_min=8, l_max=10):
+            handlers = []
+
+            def hook(module, input, output):
+                output[:] *= tau
+                return output
+
+            for i in range(l_min, l_max):
+                handler = (
+                    self.text_encoder_model.encoder.block[i]
+                    .layer[0]
+                    .SelfAttention.q.register_forward_hook(hook)
+                )
+                handlers.append(handler)
+
+            with torch.no_grad():
+                outputs = self.text_encoder_model(**inputs)
+                last_hidden_states = outputs.last_hidden_state
+
+            for hook in handlers:
+                hook.remove()
+
+            return last_hidden_states
+
+        last_hidden_states = forward_with_temperature(inputs, tau, l_min, l_max)
+        return last_hidden_states
 
     def register_controller(self):
         for i in self.blocks_to_inject_idxs:
@@ -208,9 +266,10 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
 
         return target_latents
     
-    def prepare_lyric_tokens(self, lyrics: List[str], debug: bool = False):
+    def prepare_lyric_tokens(self, lyrics: List[str], debug: bool = False, max_len=512):
         token_lists = [self.tokenize_lyrics(lr, debug=debug) for lr in lyrics]
-        max_len = max(len(toks) for toks in token_lists)
+        if max_len is None:
+            max_len = max(len(toks) for toks in token_lists)
         
         token_tensors = []
         for toks in token_lists:

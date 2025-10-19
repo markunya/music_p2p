@@ -9,10 +9,10 @@ from nti.music2noise import music2noise
 def parse_args():
     parser = argparse.ArgumentParser(
         description=(
-            "Run the ACE-Step Prompt-to-Prompt preprocessing pipeline.\n\n"
-            "The script reads lyrics, tags, and music from the input directory, "
-            "converts the music to noise using `music2noise`, and saves the resulting "
-            "latent tensors and metadata to an output file."
+            "Запускает препроцессинг пайплайна ACE-Step Prompt-to-Prompt.\n\n"
+            "Скрипт считывает текст песни, теги и аудиофайл из входной директории, "
+            "преобразует музыку в латентное шумовое представление с помощью функции `music2noise` "
+            "и сохраняет полученные тензоры и метаданные в выходной файл."
         ),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
@@ -46,12 +46,55 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--num_steps",
+        type=int,
+        required=False,
+        default=400,
+        help=(
+            "Количество шагов диффузионного процесса"
+        )
+    )
+
+    parser.add_argument(
+        "--guidance_scale",
+        type=float,
+        required=False,
+        default=15.0,
+    )
+
+    parser.add_argument(
+        "--guidance_interval",
+        type=float,
+        required=False,
+        default=0.5,
+    )
+
+    parser.add_argument(
         "--checkpoint_dir",
         type=str,
         required=True,
         help=(
             "Путь к директории с весами модели ACE-Step. "
-            "По умолчанию '../ACE_CHECKPOINTS'."
+        )
+    )
+
+    parser.add_argument(
+        "--debug_mode",
+        type=bool,
+        required=False,
+        default=False,
+        help=(
+            "Позволяет запустить оптимизацию в режиме дебага, когда логируется дополнительная инфомрация"
+        )
+    )
+
+    parser.add_argument(
+        "--audio_save_path",
+        type=str,
+        required=False,
+        default='./',
+        help=(
+            "Параметр для режима отладки. Путь куда сохранить аудио сгенерированное из шума полученного после null text optimization."
         )
     )
 
@@ -68,13 +111,12 @@ def parse_args():
 
     return args
 
-
 def main():
     args = parse_args()
 
     dtype = torch.float32
     pipeline = BaseAceStepP2PEditPipeline(
-        args.checkpint_dir,
+        args.checkpoint_dir,
         dtype=dtype
     )
 
@@ -87,20 +129,16 @@ def main():
     with open(tags_path, "r", encoding="utf-8") as f:
         tags = f.read() 
 
-    num_steps = 400
-    guidance_scale = 15.0
-    guidance_interval = 0.5
-
     noise, null_embeds_per_step = music2noise(
         pipeline=pipeline,
         path=music_path,
         lyrics=lyrics,
         tags=tags,
-        num_steps=num_steps,
-        guidance_scale=guidance_scale,
-        guidance_interval=guidance_interval,
-        debug_mode=True,
-        audio_save_path="/home/mabondarenko_4/music_p2p/check_gen"
+        num_steps=args.num_steps,
+        guidance_scale=args.guidance_scale,
+        guidance_interval=args.guidance_interval,
+        debug_mode=args.debug_mode,
+        audio_save_path=args.audio_save_path
     )
 
     data = {
@@ -108,9 +146,9 @@ def main():
         "tags": tags,
         "noise": noise,
         "null_embeds_per_step": null_embeds_per_step,
-        "num_steps": num_steps,
-        "guidance_scale": guidance_scale,
-        "guidance_interval": guidance_interval
+        "num_steps": args.num_steps,
+        "guidance_scale": args.guidance_scale,
+        "guidance_interval": args.guidance_interval
     }
         
     torch.save(data, args.out_path)

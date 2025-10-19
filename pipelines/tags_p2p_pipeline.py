@@ -26,6 +26,7 @@ class TagsP2PEditPipeline(BaseAceStepP2PEditPipeline):
         tgt_tags: List[str],
         lyrics: str,
         guidance_scale: float = 15.0,
+        guidance_interval: float = 0.5,
         infer_steps=60,
         scheduler_type: str = "euler",
         save_path: Optional[str] = None
@@ -38,6 +39,7 @@ class TagsP2PEditPipeline(BaseAceStepP2PEditPipeline):
             lyrics=[lyrics for _ in range(2 * len(tgt_tags) + 1)],
             scheduler_type=scheduler_type,
             guidance_scale=guidance_scale,
+            guidance_interval=guidance_interval,
             save_path=save_path,
         )
         return output_paths
