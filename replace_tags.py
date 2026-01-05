@@ -2,8 +2,9 @@ import os
 import torch
 import argparse
 from tqdm import tqdm
-from p2p.controllers import AttentionReplaceTags
-from pipelines.tags_p2p_pipeline import TagsP2PEditPipeline
+
+from src.p2p.controllers import AttentionReplaceTags
+from src.pipelines.tags_p2p_pipeline import TagsP2PEditPipeline
 
 def parse_args():
     parser = argparse.ArgumentParser(

@@ -1,0 +1,6 @@
+_target_: src.p2p.controllers.AttentionReplaceTags
+step_callback: null
+eta_min: 0.0
+eta_max: 1.0
+diffusion_step_start: null
+diffusion_step_end: null

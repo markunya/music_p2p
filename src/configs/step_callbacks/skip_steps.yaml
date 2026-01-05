@@ -1,0 +1,2 @@
+_target_: src.p2p.step_callback.SkipSteps
+skip_steps_num: 10

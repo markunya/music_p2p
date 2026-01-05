@@ -2,8 +2,9 @@ import os
 import torch
 import argparse
 from tqdm import tqdm
-from p2p.controllers import AttentionReplaceLyrics
-from pipelines.lyrics_p2p_pipeline import LyricsP2PEditPipeline
+
+from src.p2p.controllers import AttentionReplaceLyrics
+from src.pipelines.lyrics_p2p_pipeline import LyricsP2PEditPipeline
 
 def parse_args():
     parser = argparse.ArgumentParser(

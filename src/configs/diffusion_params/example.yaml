@@ -1,0 +1,4 @@
+_target_: src.utils.diffusion_utils.DiffusionParams
+num_steps: 400
+guidance_scale: 10
+guidance_interval: 0.5
