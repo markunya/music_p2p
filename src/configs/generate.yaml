@@ -1,0 +1,10 @@
+defaults:
+  - _self_
+
+generate:
+  device: auto
+  debug_mode: false
+  checkpoint_dir: null
+  save_dir: null
+  exp_name: null
+  seed: 1

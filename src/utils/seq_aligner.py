@@ -1,12 +1,12 @@
 import torch
-from tqdm import tqdm
 import numpy as np
 from difflib import SequenceMatcher
 import re
 from acestep.models.lyrics_utils.lyric_tokenizer import VoiceBpeTokenizer
 from typing import List
 
-from src.utils.p2p_utils import is_special_token
+from src.utils import logging
+from src.utils.utils import is_special_token
 
 structure_pattern = re.compile(r"\[.*?\]")
 lyric_tokenizer = VoiceBpeTokenizer()
@@ -31,10 +31,10 @@ def tokenize_lyrics(lyrics, debug=False):
                     toks = lyric_tokenizer.batch_decode(
                         [[tok_id] for tok_id in token_idx]
                     )
-                    tqdm.write(str(toks))
+                    logging.info(str(toks))
                 lyric_token_idx = lyric_token_idx + token_idx + [2]
             except Exception as e:
-                print("tokenize error", e, "for line", line, "major_language", lang)
+                logging.error(f"Tokenize error {e} for line {line} major_language {lang}")
         return lyric_token_idx
 
 def tokenize_tags(tags, tokenizer):

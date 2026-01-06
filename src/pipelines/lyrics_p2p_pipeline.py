@@ -1,38 +1,35 @@
+import torch
 from typing import List, Optional
 
 from src.pipelines.base_p2p_pipeline import BaseAceStepP2PEditPipeline
-from src.p2p.controllers import AttentionControl
-from src.utils.diffusion_utils import DiffusionParams
+from src.utils.structures import DiffusionParams, Prompt
 
 class LyricsP2PEditPipeline(BaseAceStepP2PEditPipeline):
-    def __init__(
-            self,
-            checkpoint_dir,
-            controller: AttentionControl = None,
-            blocks_to_inject_idxs: List[int] = None,
-            dtype="bfloat16",
-        ):
-        super().__init__(
-            checkpoint_dir,
-            controller,
-            blocks_to_inject_idxs, 
-            dtype
-        )
-
     def __call__(
         self,
-        src_lyrics: str,
-        tgt_lyrics: List[str],
-        tags: str,
+        noise: torch.Tensor,
+        null_embeds_per_step: List[torch.Tensor],
+        src_prompt: Prompt,
+        tgt_prompt: Prompt,
         diffusion_params: DiffusionParams,
-        duration: float = -1,
+        check_baseline: bool = False,
+        debug_mode: bool = False,
         save_path: Optional[str] = None
     ):
+        tags = [src_prompt.tags, src_prompt.tags]
+        lyrics = [src_prompt.lyrics, tgt_prompt.lyrics]
+        if check_baseline:
+            lyrics.append(tgt_prompt.lyrics)
+            tags.append(src_prompt.tags)
+
         output_paths = self.forward(
-            audio_duration=duration,
-            tags=[tags for _ in range(2 * len(tgt_lyrics) + 1)],
-            lyrics=[src_lyrics] + tgt_lyrics + tgt_lyrics,
+            input_latents=noise,
+            null_embeds_per_step=null_embeds_per_step,
+            tags=tags,
+            lyrics=lyrics,
             diffusion_params=diffusion_params,
             save_path=save_path,
+            debug=debug_mode
         )
+
         return output_paths

@@ -1,8 +1,9 @@
 import torch
 import torch.nn.functional as F
 import utils
-from tqdm import tqdm
 from typing import List, Optional
+from tqdm import tqdm
+
 from acestep.pipeline_ace_step import ACEStepPipeline
 from acestep.models.customer_attention_processor import CustomerAttnProcessor2_0
 from diffusers.pipelines.stable_diffusion_3.pipeline_stable_diffusion_3 import (
@@ -13,11 +14,11 @@ from acestep.apg_guidance import (
 )
 from acestep.cpu_offload import cpu_offload
 
+from src.utils import logging
 from src.p2p.controllers import AttentionControl
 from src.p2p.attention_processor import CustomerAttnProcessorWithP2PController2_0
-from src.utils.diffusion_utils import DiffusionParams
-from src.utils.p2p_utils import Prompt
-from src.schedulers import get_direct_scheduler, get_inverse_scheduler
+from src.utils.structures import DiffusionParams
+from src.schedulers import get_direct_scheduler
 
 class BaseAceStepP2PEditPipeline(ACEStepPipeline):
     def __init__(
@@ -34,7 +35,7 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
         self.controller: Optional[AttentionControl] = controller
 
         if not self.loaded:
-            tqdm.write("Checkpoint not loaded, loading checkpoint...")
+            logging.info("AceStep checkpoint not loaded, loading checkpoint...")
             if self.quantized:
                 self.load_quantized_checkpoint(self.checkpoint_dir)
             else:
@@ -133,10 +134,9 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
         random_generators=None,
         null_embeddings_per_step=None
     ):
+        logging.info(f"Diffusion params:")
+        logging.log_structure(diffusion_params)
 
-        tqdm.write(repr(diffusion_params))
-
-        
         guidance_params = diffusion_params.guidance_params
         if guidance_params.guidance_scale == 0.0 or \
             guidance_params.guidance_scale == 1.0:
@@ -161,7 +161,7 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
         # guidance interval
         start_idx = int(num_inference_steps * ((1 - guidance_params.guidance_interval) / 2))
         end_idx = int(num_inference_steps * (guidance_params.guidance_interval / 2 + 0.5))
-        tqdm.write(
+        logging.info(
             f"start_idx: {start_idx}, end_idx: {end_idx}, num_inference_steps: {num_inference_steps}"
         )
 

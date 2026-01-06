@@ -1,34 +1,11 @@
 import torch
 
-from enum import Enum, auto
-from dataclasses import dataclass
-
 from acestep.apg_guidance import (
     apg_forward,
     cfg_forward,
     cfg_zero_star,
 )
-from src.schedulers import SchedulerType
-
-class CfgType(Enum):
-    APG = auto()
-    CFG = auto()
-    CFG_STAR = auto()
-
-@dataclass
-class GuidanceParams:
-    type: CfgType
-    guidance_scale: float
-    guidance_interval: float
-    guidance_interval_decay: float
-    min_guidance_scale: float
-
-@dataclass
-class DiffusionParams:
-    num_steps: int
-    guidance_params: GuidanceParams
-    omega_scale: float
-    scheduler_type: SchedulerType
+from src.utils.structures import CfgType, GuidanceParams
     
 def mix_guidance(
     cfg_type: CfgType,

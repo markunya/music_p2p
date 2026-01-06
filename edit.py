@@ -4,10 +4,10 @@ import warnings
 import hydra
 from hydra.utils import instantiate
 
+from src.utils import logging
 from src.nti.music2noise import music2noise
 from src.utils.utils import set_random_seed
-from src.utils.diffusion_utils import DiffusionParams
-from src.utils.p2p_utils import P2PTaskParams
+from src.utils.structures import DiffusionParams, P2PTaskParams, dump
 from src.pipelines.lyrics_p2p_pipeline import LyricsP2PEditPipeline
 from src.pipelines.tags_p2p_pipeline import TagsP2PEditPipeline
 from src.p2p.controllers import AttentionControl
@@ -43,29 +43,17 @@ def main(config):
         audio_save_path = os.path.join(exp_dir, 'music2noise')
         os.makedirs(audio_save_path)
 
-        noise, null_embeds_per_step = music2noise(
+        inverted_music_data = music2noise(
             pipeline=pipeline,
             path=p2p_task_params.music_path,
-            lyrics=p2p_task_params.src.lyrics,
-            tags=p2p_task_params.src.tags,
-            num_steps=diffusion_params.num_steps,
-            guidance_scale=diffusion_params.guidance_scale,
-            guidance_interval=diffusion_params.guidance_interval,
+            prompt=config.p2p_task_params.src,
+            diffusion_params=diffusion_params,
             debug_mode=config.edit.debug_mode,
             audio_save_path=audio_save_path
         )
-
-        data = {
-            "lyrics": p2p_task_params.src.lyrics,
-            "tags": p2p_task_params.src.tags,
-            "noise": noise,
-            "null_embeds_per_step": null_embeds_per_step,
-            "num_steps": config.diffusion_params.num_steps,
-            "guidance_scale": config.diffusion_params.guidance_scale,
-            "guidance_interval": config.diffusion_params.guidance_interval
-        }
-
-
+        out_path = os.path.join(audio_save_path, 'inverted_music_data.pth')
+        dump(inverted_music_data, out_path)
+        logging.info(f"Music successfully inverted and saved to {out_path}")
 
 if __name__ == "__main__":
     main()

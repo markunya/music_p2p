@@ -3,6 +3,9 @@ import os
 import random
 import torch
 
+def is_special_token(token: str):
+    return token.startswith('<') and token.endswith('>')
+
 def set_random_seed(seed):
     """
     Set random seed for model training or inference.

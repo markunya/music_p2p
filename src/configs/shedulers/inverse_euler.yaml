@@ -1,3 +1,0 @@
-_target_: src.schedulers.FlowMatchEulerInverseDiscreteScheduler
-num_train_timesteps: 1000
-shift: 3.0

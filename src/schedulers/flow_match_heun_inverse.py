@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from typing import Union, Optional, List, Tuple
+from typing import Union, Optional, Tuple
 from acestep.schedulers.scheduling_flow_match_heun_discrete import (
     FlowMatchHeunDiscreteScheduler, FlowMatchHeunDiscreteSchedulerOutput
 )

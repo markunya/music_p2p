@@ -1,8 +1,7 @@
 import abc
 import torch
 import math
-from typing import Union, Tuple, Optional, Dict
-from tqdm import tqdm
+from typing import Optional
 
 import src.utils.seq_aligner as seq_aligner
 from src.p2p.step_callback import StepCallbackBase

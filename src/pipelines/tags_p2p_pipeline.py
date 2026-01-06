@@ -3,44 +3,34 @@ from typing import List, Optional
 
 from src.pipelines.base_p2p_pipeline import BaseAceStepP2PEditPipeline
 from src.p2p.controllers import AttentionControl
+from src.utils.structures import DiffusionParams, Prompt
 
 class TagsP2PEditPipeline(BaseAceStepP2PEditPipeline):
-    def __init__(
-            self,
-            checkpoint_dir,
-            controller: AttentionControl = None,
-            blocks_to_inject_idxs: List[int] = None,
-            dtype="bfloat16",
-        ):
-        super().__init__(
-            checkpoint_dir,
-            controller,
-            blocks_to_inject_idxs,
-            dtype
-        )
-
     def __call__(
         self,
         noise: torch.Tensor,
         null_embeds_per_step: List[torch.Tensor],
-        src_tags: str,
-        tgt_tags: List[str],
-        lyrics: str,
-        guidance_scale: float = 15.0,
-        guidance_interval: float = 0.5,
-        infer_steps=60,
-        scheduler_type: str = "euler",
+        src_prompt: Prompt,
+        tgt_prompt: Prompt,
+        diffusion_params: DiffusionParams,
+        check_baseline: bool = False,
+        debug_mode: bool = False,
         save_path: Optional[str] = None
     ):
+        lyrics = [src_prompt.lyrics, src_prompt.lyrics]
+        tags = [src_prompt.tags, tgt_prompt.tags]
+        if check_baseline:
+            lyrics.append(src_prompt.lyrics)
+            tags.append(tgt_prompt.tags)
+
         output_paths = self.forward(
             input_latents=noise,
             null_embeds_per_step=null_embeds_per_step,
-            infer_step=infer_steps,
-            tags=[src_tags] + tgt_tags + tgt_tags,
-            lyrics=[lyrics for _ in range(2 * len(tgt_tags) + 1)],
-            scheduler_type=scheduler_type,
-            guidance_scale=guidance_scale,
-            guidance_interval=guidance_interval,
+            tags=tags,
+            lyrics=lyrics,
+            diffusion_params=diffusion_params,
+            debug=debug_mode,
             save_path=save_path,
         )
+
         return output_paths
