@@ -1,12 +1,13 @@
 import torch
-import utils.diffusion_utils as diffusion_utils
-from tqdm import tqdm
-
 from diffusers.pipelines.stable_diffusion_3.pipeline_stable_diffusion_3 import (
     retrieve_timesteps,
 )
-from src.utils.diffusion_utils import DiffusionParams
+from tqdm import tqdm
+
+import utils.diffusion_utils as diffusion_utils
 from src.schedulers import get_inverse_scheduler
+from src.utils.diffusion_utils import DiffusionParams
+
 
 @torch.no_grad()
 def build_pivot_trajectory(
@@ -18,10 +19,10 @@ def build_pivot_trajectory(
     lyric_token_ids,
     lyric_mask,
     diffusion_params: DiffusionParams,
-    random_generators=None
+    random_generators=None,
 ):
     bsz = encoder_text_hidden_states.shape[0]
-    
+
     scheduler = get_inverse_scheduler(diffusion_params.scheduler_type)
     frame_length = target_latents.shape[-1]
 
@@ -36,7 +37,7 @@ def build_pivot_trajectory(
         bsz,
         frame_length,
         device=ace_step_transformer.device,
-        dtype=ace_step_transformer.dtype
+        dtype=ace_step_transformer.dtype,
     )
 
     encoder_hidden_states, encoder_hidden_mask = ace_step_transformer.encode(
@@ -48,7 +49,11 @@ def build_pivot_trajectory(
     )
 
     trajectory = [target_latents.detach().clone()]
-    for i, t in tqdm(enumerate(timesteps), total=num_inference_steps, desc="Building pivot trajectory..."):
+    for i, t in tqdm(
+        enumerate(timesteps),
+        total=num_inference_steps,
+        desc="Building pivot trajectory...",
+    ):
         timestep = t.expand(target_latents.shape[0])
 
         noise_pred = ace_step_transformer.decode(

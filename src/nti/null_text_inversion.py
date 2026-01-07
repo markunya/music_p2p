@@ -1,10 +1,18 @@
 import copy
+
 import torch
 import torch.nn.functional as F
+from acestep.apg_guidance import MomentumBuffer
 from torch.optim import Adam
 from tqdm import tqdm
-from acestep.apg_guidance import MomentumBuffer
-from src.utils.diffusion_utils import mix_guidance, compute_current_guidance, GuidanceParams, CfgType
+
+from src.utils.diffusion_utils import (
+    CfgType,
+    GuidanceParams,
+    compute_current_guidance,
+    mix_guidance,
+)
+
 
 @torch.no_grad()
 def _encode_pair(
@@ -13,20 +21,24 @@ def _encode_pair(
     text_attention_mask,
     speaker_embds,
     lyric_token_ids,
-    lyric_mask
+    lyric_mask,
 ):
     cond_emb, cond_mask = ace_step_transformer.encode(
-        encoder_text_hidden_states, text_attention_mask,
-        speaker_embds, lyric_token_ids, lyric_mask
+        encoder_text_hidden_states,
+        text_attention_mask,
+        speaker_embds,
+        lyric_token_ids,
+        lyric_mask,
     )
     null_emb, _ = ace_step_transformer.encode(
         torch.zeros_like(encoder_text_hidden_states),
         text_attention_mask,
         torch.zeros_like(speaker_embds),
         torch.zeros_like(lyric_token_ids),
-        lyric_mask
+        lyric_mask,
     )
     return cond_emb, cond_mask, null_emb
+
 
 def _reset_scheduler_at_t(scheduler, t):
     idx = scheduler.index_for_timestep(t, scheduler.timesteps)
@@ -38,6 +50,7 @@ def _reset_scheduler_at_t(scheduler, t):
     if hasattr(scheduler, "sample"):
         scheduler.sample = None
 
+
 def _mb_clone_detached(mb):
     if mb is None:
         return None
@@ -46,6 +59,7 @@ def _mb_clone_detached(mb):
         if torch.is_tensor(v):
             snap.__dict__[k] = v.detach().clone()
     return snap
+
 
 def null_text_optimization(
     ace_step_transformer,
@@ -67,7 +81,7 @@ def null_text_optimization(
     momentum_buffer = MomentumBuffer() if guidance_params.type == CfgType.APG else None
 
     device = ace_step_transformer.device
-    dtype  = ace_step_transformer.dtype
+    dtype = ace_step_transformer.dtype
 
     bsz = encoder_text_hidden_states.shape[0]
     frame_length = trajectory[0].shape[-1]
@@ -75,20 +89,29 @@ def null_text_optimization(
 
     cond_emb, cond_mask, base_null_emb = _encode_pair(
         ace_step_transformer,
-        encoder_text_hidden_states, text_attention_mask,
-        speaker_embds, lyric_token_ids, lyric_mask
+        encoder_text_hidden_states,
+        text_attention_mask,
+        speaker_embds,
+        lyric_token_ids,
+        lyric_mask,
     )
 
     num_inference_steps = len(timesteps)
     start_idx = int(num_inference_steps * ((1 - guidance_params.guidance_interval) / 2))
-    end_idx   = int(num_inference_steps * (guidance_params.guidance_interval / 2 + 0.5))
-    do_cfg = not (guidance_params.guidance_scale == 0.0 or guidance_params.guidance_scale == 1.0)
+    end_idx = int(num_inference_steps * (guidance_params.guidance_interval / 2 + 0.5))
+    do_cfg = not (
+        guidance_params.guidance_scale == 0.0 or guidance_params.guidance_scale == 1.0
+    )
 
     null_embeddings_per_step, losses_per_step = [], []
     latent_cur = trajectory[0].to(device=device, dtype=dtype)
 
-    for i, t in tqdm(enumerate(timesteps), total=num_inference_steps, desc="Null-text optimization..."):
-        latent_next = trajectory[i+1].to(device=device, dtype=dtype)
+    for i, t in tqdm(
+        enumerate(timesteps),
+        total=num_inference_steps,
+        desc="Null-text optimization...",
+    ):
+        latent_next = trajectory[i + 1].to(device=device, dtype=dtype)
 
         with torch.no_grad():
             noise_cond = ace_step_transformer.decode(
@@ -106,7 +129,7 @@ def null_text_optimization(
 
         if (not do_cfg) or (not in_window):
             null_embeddings_per_step.append(base_null_emb.detach().clone())
-            losses_per_step.append(float('nan'))
+            losses_per_step.append(float("nan"))
 
             with torch.no_grad():
                 _reset_scheduler_at_t(scheduler, t)
@@ -135,14 +158,18 @@ def null_text_optimization(
                 timestep=t.expand(latent_cur.shape[0]),
             ).sample
 
-            mb_snapshot = _mb_clone_detached(momentum_buffer) if guidance_params == CfgType.APG else None
+            mb_snapshot = (
+                _mb_clone_detached(momentum_buffer)
+                if guidance_params == CfgType.APG
+                else None
+            )
             noise_pred = mix_guidance(
                 cfg_type=guidance_params.type,
                 noise_cond=noise_cond,
                 noise_null=noise_null,
                 gscale=cur_scale,
                 momentum_buffer=mb_snapshot,
-                i=i
+                i=i,
             )
 
             lat_prev = scheduler.step(
@@ -184,7 +211,7 @@ def null_text_optimization(
                 noise_null=noise_null,
                 gscale=cur_scale,
                 momentum_buffer=momentum_buffer,
-                i=i
+                i=i,
             )
 
             latent_cur = scheduler.step(

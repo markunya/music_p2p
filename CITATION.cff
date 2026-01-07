@@ -1,0 +1,46 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata from this file."
+type: software
+
+title: "ACE-Step: A Step Towards Music Generation Foundation Model"
+
+authors:
+  - family-names: "Gong"
+    given-names: "Junmin"
+  - family-names: "Zhao"
+    given-names: "Wenxiao"
+  - family-names: "Wang"
+    given-names: "Sen"
+  - family-names: "Xu"
+    given-names: "Shengyuan"
+  - family-names: "Guo"
+    given-names: "Jing"
+
+year: 2025
+url: "https://github.com/ace-step/ACE-Step"
+
+repository-code: "https://github.com/ace-step/ACE-Step"
+
+keywords:
+  - "music generation"
+  - "foundation model"
+  - "diffusion"
+  - "flow matching"
+
+preferred-citation:
+  type: misc
+  title: "ACE-Step: A Step Towards Music Generation Foundation Model"
+  authors:
+    - family-names: "Gong"
+      given-names: "Junmin"
+    - family-names: "Zhao"
+      given-names: "Wenxiao"
+    - family-names: "Wang"
+      given-names: "Sen"
+    - family-names: "Xu"
+      given-names: "Shengyuan"
+    - family-names: "Guo"
+      given-names: "Jing"
+  year: 2025
+  url: "https://github.com/ace-step/ACE-Step"
+  notes: "GitHub repository"

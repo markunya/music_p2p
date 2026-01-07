@@ -1,9 +1,12 @@
-import torch
+from typing import Optional, Tuple, Union
+
 import numpy as np
-from typing import Union, Optional, Tuple
+import torch
 from acestep.schedulers.scheduling_flow_match_heun_discrete import (
-    FlowMatchHeunDiscreteScheduler, FlowMatchHeunDiscreteSchedulerOutput
+    FlowMatchHeunDiscreteScheduler,
+    FlowMatchHeunDiscreteSchedulerOutput,
 )
+
 
 class FlowMatchHeunInverseDiscreteScheduler(FlowMatchHeunDiscreteScheduler):
     def set_timesteps(
@@ -12,10 +15,12 @@ class FlowMatchHeunInverseDiscreteScheduler(FlowMatchHeunDiscreteScheduler):
         device: Union[str, torch.device] = None,
         **kwargs,
     ):
-        super().set_timesteps(num_inference_steps=num_inference_steps, device=device, **kwargs)
+        super().set_timesteps(
+            num_inference_steps=num_inference_steps, device=device, **kwargs
+        )
 
         self.timesteps = torch.flip(self.timesteps, [0])
-        self.sigmas    = torch.flip(self.sigmas,    [0])
+        self.sigmas = torch.flip(self.sigmas, [0])
 
         self.prev_derivative = None
         self.dt = None
@@ -51,6 +56,7 @@ class FlowMatchHeunInverseDiscreteScheduler(FlowMatchHeunDiscreteScheduler):
             if isinstance(y, np.ndarray):
                 y = torch.from_numpy(y).to(device_)
             return y
+
         self.omega_bef_rescale = omega
         omega = logistic_function(omega, k=0.1)
         self.omega_aft_rescale = omega
@@ -69,22 +75,23 @@ class FlowMatchHeunInverseDiscreteScheduler(FlowMatchHeunDiscreteScheduler):
         return_dict: bool = True,
         omega: Union[float, np.array] = 1.0,
     ) -> Union[FlowMatchHeunDiscreteSchedulerOutput, Tuple]:
-
         if (
             isinstance(timestep, int)
             or isinstance(timestep, torch.IntTensor)
             or isinstance(timestep, torch.LongTensor)
         ):
-            raise ValueError("Pass actual scheduler.timesteps value, not integer index.")
+            raise ValueError(
+                "Pass actual scheduler.timesteps value, not integer index."
+            )
 
         if self.step_index is None:
             self._init_step_index(timestep)
 
         sample = sample.to(torch.float32)
-        omega  = self._omega_rescale(omega)
+        omega = self._omega_rescale(omega)
 
         if self.state_in_first_order:
-            sigma      = self.sigmas[self.step_index]
+            sigma = self.sigmas[self.step_index]
             sigma_next = self.sigmas[self.step_index + 1]
 
             v1 = model_output
@@ -95,17 +102,17 @@ class FlowMatchHeunInverseDiscreteScheduler(FlowMatchHeunDiscreteScheduler):
             self.sample = sample
 
             dx = v1 * dt
-            m  = dx.mean()
+            m = dx.mean()
             dx = (dx - m) * omega + m
             next_sample = sample + dx
 
         else:
-            sigma      = self.sigmas[self.step_index - 1]
+            sigma = self.sigmas[self.step_index - 1]
             sigma_next = self.sigmas[self.step_index]
 
             v1 = self.prev_derivative
             v2 = model_output
-            v  = 0.5 * (v1 + v2)
+            v = 0.5 * (v1 + v2)
 
             dt = self.dt
             sample = self.sample
@@ -115,7 +122,7 @@ class FlowMatchHeunInverseDiscreteScheduler(FlowMatchHeunDiscreteScheduler):
             self.sample = None
 
             dx = v * dt
-            m  = dx.mean()
+            m = dx.mean()
             dx = (dx - m) * omega + m
             next_sample = sample + dx
 

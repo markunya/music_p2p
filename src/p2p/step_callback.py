@@ -1,7 +1,9 @@
 import abc
+from typing import List
+
 import torch
 import torch.nn.functional as F
-from typing import List
+
 
 class StepCallbackBase(abc.ABC):
     @abc.abstractmethod
@@ -9,30 +11,34 @@ class StepCallbackBase(abc.ABC):
         self,
         x_t: torch.Tensor,
         attention_store: List[torch.Tensor],
-        diffusion_step: int
+        diffusion_step: int,
     ):
         raise NotImplementedError
-    
+
+
 class SkipSteps:
     def __init__(self, skip_steps_num: int):
         self.skip_steps_num = int(skip_steps_num)
 
     @torch.no_grad()
-    def __call__(self, x_t: torch.Tensor, attention_store, diffusion_step: int) -> torch.Tensor:
+    def __call__(
+        self, x_t: torch.Tensor, attention_store, diffusion_step: int
+    ) -> torch.Tensor:
         if diffusion_step < self.skip_steps_num:
             ref = x_t[:1]
             return ref.expand_as(x_t)
         return x_t
 
+
 class LyricsLocalBlendTimeOnly(StepCallbackBase):
     def __init__(
-            self,
-            lyrics_len: int,
-            threshold: float = 0.4,
-            pool_k: int = 3,
-            start_diffusion_step: int = 50,
-            mask: List[int] = None
-        ):
+        self,
+        lyrics_len: int,
+        threshold: float = 0.4,
+        pool_k: int = 3,
+        start_diffusion_step: int = 50,
+        mask: List[int] = None,
+    ):
         self.lyrics_len = int(lyrics_len)
         self.threshold = threshold
         self.pool_k = pool_k
@@ -69,4 +75,3 @@ class LyricsLocalBlendTimeOnly(StepCallbackBase):
         if isinstance(self.mask, list):
             self.mask = torch.tensor(self.mask, device=x_t.device)
         return x_ref + self.mask * (x_t - x_ref)
-

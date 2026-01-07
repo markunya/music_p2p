@@ -1,8 +1,10 @@
-import torch
 from typing import List, Optional
+
+import torch
 
 from src.pipelines.base_p2p_pipeline import BaseAceStepP2PEditPipeline
 from src.utils.structures import DiffusionParams, Prompt
+
 
 class LyricsP2PEditPipeline(BaseAceStepP2PEditPipeline):
     def __call__(
@@ -14,7 +16,7 @@ class LyricsP2PEditPipeline(BaseAceStepP2PEditPipeline):
         diffusion_params: DiffusionParams,
         check_baseline: bool = False,
         debug_mode: bool = False,
-        save_path: Optional[str] = None
+        save_path: Optional[str] = None,
     ):
         tags = [src_prompt.tags, src_prompt.tags]
         lyrics = [src_prompt.lyrics, tgt_prompt.lyrics]
@@ -29,7 +31,7 @@ class LyricsP2PEditPipeline(BaseAceStepP2PEditPipeline):
             lyrics=lyrics,
             diffusion_params=diffusion_params,
             save_path=save_path,
-            debug=debug_mode
+            debug=debug_mode,
         )
 
         return output_paths

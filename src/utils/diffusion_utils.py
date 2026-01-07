@@ -1,19 +1,16 @@
 import torch
+from acestep.apg_guidance import apg_forward, cfg_forward, cfg_zero_star
 
-from acestep.apg_guidance import (
-    apg_forward,
-    cfg_forward,
-    cfg_zero_star,
-)
 from src.utils.structures import CfgType, GuidanceParams
-    
+
+
 def mix_guidance(
     cfg_type: CfgType,
     noise_cond: torch.Tensor,
     noise_null: torch.Tensor,
     gscale: float,
     momentum_buffer=None,
-    i=None
+    i=None,
 ):
     match cfg_type:
         case CfgType.APG:
@@ -40,8 +37,11 @@ def mix_guidance(
             )
         case _:
             raise ValueError(f"Unknown cfg_type: {cfg_type}")
-    
-def compute_current_guidance(i: int, start_idx: int, end_idx: int, guidance_params: GuidanceParams):
+
+
+def compute_current_guidance(
+    i: int, start_idx: int, end_idx: int, guidance_params: GuidanceParams
+):
     """
     Compute the guidance scale for step `i` within an active guidance interval.
 

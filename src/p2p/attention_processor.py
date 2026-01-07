@@ -1,17 +1,19 @@
-import torch
 import math
+from typing import Optional, Tuple, Union
+
+import torch
 import torch.nn.functional as F
-from diffusers.models.attention_processor import Attention
 from acestep.models.customer_attention_processor import CustomerAttnProcessor2_0
-from typing import Optional, Union, Tuple
+from diffusers.models.attention_processor import Attention
 
 from src.p2p.controllers import AttentionControl
+
 
 class CustomerAttnProcessorWithP2PController2_0(CustomerAttnProcessor2_0):
     def __init__(self, controller: Optional[AttentionControl]):
         super().__init__()
         self.controller = controller
-    
+
     def scaled_dot_product_attention(
         self,
         query,
@@ -21,9 +23,8 @@ class CustomerAttnProcessorWithP2PController2_0(CustomerAttnProcessor2_0):
         dropout_p=0.0,
         is_causal=False,
         scale=None,
-        enable_gqa=False
+        enable_gqa=False,
     ) -> torch.Tensor:
-
         L, S = query.size(-2), key.size(-2)
         scale_factor = 1 / math.sqrt(query.size(-1)) if scale is None else scale
         attn_bias = torch.zeros(L, S, dtype=query.dtype, device=query.device)
@@ -40,8 +41,8 @@ class CustomerAttnProcessorWithP2PController2_0(CustomerAttnProcessor2_0):
                 attn_bias = attn_mask + attn_bias
 
         if enable_gqa:
-            key = key.repeat_interleave(query.size(-3)//key.size(-3), -3)
-            value = value.repeat_interleave(query.size(-3)//value.size(-3), -3)
+            key = key.repeat_interleave(query.size(-3) // key.size(-3), -3)
+            value = value.repeat_interleave(query.size(-3) // value.size(-3), -3)
 
         attn_weight = query @ key.transpose(-2, -1) * scale_factor
         attn_weight += attn_bias
@@ -64,7 +65,6 @@ class CustomerAttnProcessorWithP2PController2_0(CustomerAttnProcessor2_0):
         *args,
         **kwargs,
     ) -> torch.Tensor:
-
         residual = hidden_states
         input_ndim = hidden_states.ndim
 
@@ -154,8 +154,15 @@ class CustomerAttnProcessorWithP2PController2_0(CustomerAttnProcessor2_0):
 
         # the output of sdp = (batch, num_heads, seq_len, head_dim)
         # TODO: add support for attn.scale when we move to Torch 2.1
-        hidden_states = self.scaled_dot_product_attention( # the only difference with base class
-            query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False
+        hidden_states = (
+            self.scaled_dot_product_attention(  # the only difference with base class
+                query,
+                key,
+                value,
+                attn_mask=attention_mask,
+                dropout_p=0.0,
+                is_causal=False,
+            )
         )
 
         hidden_states = hidden_states.transpose(1, 2).reshape(

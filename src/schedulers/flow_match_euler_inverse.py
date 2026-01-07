@@ -1,9 +1,12 @@
-import torch
+from typing import List, Optional, Union
+
 import numpy as np
-from typing import Union, Optional, List
+import torch
 from acestep.schedulers.scheduling_flow_match_euler_discrete import (
-    FlowMatchEulerDiscreteScheduler, FlowMatchEulerDiscreteSchedulerOutput
+    FlowMatchEulerDiscreteScheduler,
+    FlowMatchEulerDiscreteSchedulerOutput,
 )
+
 
 class FlowMatchEulerInverseDiscreteScheduler(FlowMatchEulerDiscreteScheduler):
     def set_timesteps(
@@ -48,6 +51,7 @@ class FlowMatchEulerInverseDiscreteScheduler(FlowMatchEulerDiscreteScheduler):
             if isinstance(new_x, np.ndarray):
                 new_x = torch.from_numpy(new_x).to(device_)
             return new_x
+
         self.omega_bef_rescale = omega
         omega = logistic_function(omega, k=0.1)
         self.omega_aft_rescale = omega
@@ -71,7 +75,9 @@ class FlowMatchEulerInverseDiscreteScheduler(FlowMatchEulerDiscreteScheduler):
             or isinstance(timestep, torch.IntTensor)
             or isinstance(timestep, torch.LongTensor)
         ):
-            raise ValueError("Pass actual scheduler.timesteps value, not integer index.")
+            raise ValueError(
+                "Pass actual scheduler.timesteps value, not integer index."
+            )
 
         if self.step_index is None:
             self._init_step_index(timestep)
@@ -81,7 +87,9 @@ class FlowMatchEulerInverseDiscreteScheduler(FlowMatchEulerDiscreteScheduler):
 
         sigma = self.sigmas[self.step_index]
         if self.step_index + 1 >= len(self.sigmas):
-            raise IndexError("Inverse step out of bounds: no sigma_next. Check timesteps length.")
+            raise IndexError(
+                "Inverse step out of bounds: no sigma_next. Check timesteps length."
+            )
         sigma_next = self.sigmas[self.step_index + 1]
 
         dx = (sigma_next - sigma) * model_output

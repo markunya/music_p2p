@@ -1,37 +1,33 @@
+from typing import List, Optional
+
 import torch
 import torch.nn.functional as F
-import utils
-from typing import List, Optional
-from tqdm import tqdm
-
-from acestep.pipeline_ace_step import ACEStepPipeline
+from acestep.apg_guidance import MomentumBuffer
+from acestep.cpu_offload import cpu_offload
 from acestep.models.customer_attention_processor import CustomerAttnProcessor2_0
+from acestep.pipeline_ace_step import ACEStepPipeline
 from diffusers.pipelines.stable_diffusion_3.pipeline_stable_diffusion_3 import (
     retrieve_timesteps,
 )
-from acestep.apg_guidance import (
-    MomentumBuffer,
-)
-from acestep.cpu_offload import cpu_offload
+from tqdm import tqdm
 
-from src.utils import logging
-from src.p2p.controllers import AttentionControl
+import utils
 from src.p2p.attention_processor import CustomerAttnProcessorWithP2PController2_0
-from src.utils.structures import DiffusionParams
+from src.p2p.controllers import AttentionControl
 from src.schedulers import get_direct_scheduler
+from src.utils import logging
+from src.utils.structures import DiffusionParams
+
 
 class BaseAceStepP2PEditPipeline(ACEStepPipeline):
     def __init__(
-            self,
-            checkpoint_dir,
-            controller: Optional[AttentionControl] = None,
-            blocks_to_inject_idxs=None,
-            dtype="bfloat16"
-        ):
-        super().__init__(
-            checkpoint_dir,
-            dtype=dtype
-        )
+        self,
+        checkpoint_dir,
+        controller: Optional[AttentionControl] = None,
+        blocks_to_inject_idxs=None,
+        dtype="bfloat16",
+    ):
+        super().__init__(checkpoint_dir, dtype=dtype)
         self.controller: Optional[AttentionControl] = controller
 
         if not self.loaded:
@@ -50,7 +46,7 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
         inputs = self.text_tokenizer(
             texts,
             return_tensors="pt",
-            padding='max_length',
+            padding="max_length",
             truncation=True,
             max_length=text_max_length,
         )
@@ -70,7 +66,7 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
         inputs = self.text_tokenizer(
             texts,
             return_tensors="pt",
-            padding='max_length',
+            padding="max_length",
             truncation=True,
             max_length=text_max_length,
         )
@@ -132,14 +128,16 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
         lyric_mask,
         diffusion_params: DiffusionParams,
         random_generators=None,
-        null_embeddings_per_step=None
+        null_embeddings_per_step=None,
     ):
-        logging.info(f"Diffusion params:")
+        logging.info("Diffusion params:")
         logging.log_structure(diffusion_params)
 
         guidance_params = diffusion_params.guidance_params
-        if guidance_params.guidance_scale == 0.0 or \
-            guidance_params.guidance_scale == 1.0:
+        if (
+            guidance_params.guidance_scale == 0.0
+            or guidance_params.guidance_scale == 1.0
+        ):
             do_classifier_free_guidance = False
         else:
             do_classifier_free_guidance = True
@@ -156,11 +154,17 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
             timesteps=None,
         )
 
-        attention_mask = torch.ones(bsz, frame_length, device=self.device, dtype=self.dtype)
+        attention_mask = torch.ones(
+            bsz, frame_length, device=self.device, dtype=self.dtype
+        )
 
         # guidance interval
-        start_idx = int(num_inference_steps * ((1 - guidance_params.guidance_interval) / 2))
-        end_idx = int(num_inference_steps * (guidance_params.guidance_interval / 2 + 0.5))
+        start_idx = int(
+            num_inference_steps * ((1 - guidance_params.guidance_interval) / 2)
+        )
+        end_idx = int(
+            num_inference_steps * (guidance_params.guidance_interval / 2 + 0.5)
+        )
         logging.info(
             f"start_idx: {start_idx}, end_idx: {end_idx}, num_inference_steps: {num_inference_steps}"
         )
@@ -186,14 +190,17 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
                 lyric_mask,
             )
 
-            null_embeddings_per_step = [encoder_hidden_states_null]*len(timesteps)
+            null_embeddings_per_step = [encoder_hidden_states_null] * len(timesteps)
 
         target_latents = input_latents
 
         for i, t in tqdm(enumerate(timesteps), total=num_inference_steps):
             # expand the latents if we are doing classifier free guidance
             latents = target_latents
-            current_guidance_scale, is_in_guidance_interval = utils.diffusion_utils.compute_current_guidance(
+            (
+                current_guidance_scale,
+                is_in_guidance_interval,
+            ) = utils.diffusion_utils.compute_current_guidance(
                 i, start_idx, end_idx, guidance_params
             )
 
@@ -229,13 +236,13 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
                     noise_null=noise_pred_uncond,
                     gscale=current_guidance_scale,
                     momentum_buffer=momentum_buffer,
-                    i=i
+                    i=i,
                 )
 
             else:
                 latent_model_input = latents
                 timestep = t.expand(latent_model_input.shape[0])
-                
+
                 self.register_controller()
                 noise_pred = self.ace_step_transformer.decode(
                     hidden_states=latent_model_input,
@@ -257,27 +264,27 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
             )[0]
 
             if self.controller is not None:
-                self.set_diffusion_step_to_controller(i+1)
+                self.set_diffusion_step_to_controller(i + 1)
                 target_latents = self.controller.step_callback(target_latents)
 
         return target_latents
-    
+
     def prepare_lyric_tokens(self, lyrics: List[str], debug: bool = False, max_len=512):
         token_lists = [self.tokenize_lyrics(lr, debug=debug) for lr in lyrics]
         if max_len is None:
             max_len = max(len(toks) for toks in token_lists)
-        
+
         token_tensors = []
         for toks in token_lists:
             t = torch.tensor(toks, dtype=torch.long)
             pad_len = max_len - t.size(0)
             token_tensors.append(F.pad(t, (0, pad_len), value=0))
-        
+
         lyric_token_ids = torch.stack(token_tensors, dim=0).to(self.device)
         lyric_mask = (lyric_token_ids != 0).long()
-        
+
         return lyric_token_ids, lyric_mask
-    
+
     def forward(
         self,
         input_latents: torch.Tensor,
@@ -310,7 +317,7 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
             lyric_token_ids=lyric_token_idx,
             lyric_mask=lyric_mask,
             random_generators=None,
-            diffusion_params=diffusion_params
+            diffusion_params=diffusion_params,
         )
 
         output_paths = self.latents2audio(
@@ -321,4 +328,3 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
 
         self.cleanup_memory()
         return output_paths
-    
