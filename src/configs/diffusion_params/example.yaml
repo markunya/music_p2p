@@ -1,13 +1,9 @@
-_target_: src.utils.diffusion_utils.DiffusionParams
 num_steps: 60
 guidance_params:
-  _target_: src.utils.diffusion_utils.GuidanceParams
-  type:
-    _target_: src.utils.diffusion_utils.CfgType.APG
+  type: APG
   guidance_scale: 15.0
   guidance_interval: 0.5
   guidance_interval_decay: 1.0
   min_guidance_scale: 3.0
 omega_scale: 10.0
-scheduler_type:
-  _target_: src.utils.diffusion_utils.SchedulerType.Euler
+scheduler_type: Euler

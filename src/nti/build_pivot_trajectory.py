@@ -4,9 +4,8 @@ from diffusers.pipelines.stable_diffusion_3.pipeline_stable_diffusion_3 import (
 )
 from tqdm import tqdm
 
-import utils.diffusion_utils as diffusion_utils
 from src.schedulers import get_inverse_scheduler
-from src.utils.diffusion_utils import DiffusionParams
+from src.utils.structures import DiffusionParams
 
 
 @torch.no_grad()

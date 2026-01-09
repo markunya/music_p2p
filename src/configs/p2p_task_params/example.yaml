@@ -1,11 +1,11 @@
-_target_: src.utils.p2p_utils.P2PTaskParams
+_target_: src.utils.structures.P2PTaskParams
 music_path: null
 inverted_music_path: null
 src:
-  _target_: src.utils.p2p_utils.Prompt
+  _target_: src.utils.structures.Prompt
   tags: "pop, dance pop, energetic, catchy, synths, upbeat, female vocal, lively"
   lyrics: "Dancing in the fire, the rhythm takes control!"
 tgt:
-  _target_: src.utils.p2p_utils.Prompt
+  _target_: src.utils.structures.Prompt
   tags: "pop, dance pop, energetic, catchy, synths, upbeat, female vocal, lively"
   lyrics: "Prancing with desire, it’s burning through my soul!"

@@ -1,0 +1,24 @@
+debug_mode: false
+duration: -1
+checkpoint_dir: ../ACE-Step
+save_dir: _exps/gen
+seed: 1
+prompt:
+  _target_: src.utils.structures.Prompt
+  tags: pop, dance pop, energetic, catchy, synths, upbeat, female vocal, lively
+  lyrics: Dancing in the fire, the rhythm takes control!
+diffusion_params:
+  _target_: src.utils.structures.DiffusionParams
+  num_steps: 60
+  guidance_params:
+    _target_: src.utils.structures.GuidanceParams
+    type:
+      _target_: src.utils.structures.CfgType.APG
+    guidance_scale: 15.0
+    guidance_interval: 0.5
+    guidance_interval_decay: 1.0
+    min_guidance_scale: 3.0
+  omega_scale: 10.0
+  scheduler_type:
+    _target_: src.utils.structures.SchedulerType.Euler
+exp_name: try

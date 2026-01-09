@@ -1,38 +1,55 @@
-import os
 import warnings
+from dataclasses import dataclass
+from typing import Optional
 
 import hydra
-from acestep.pipeline_ace_step import ACEStepPipeline
-from hydra.utils import instantiate
+from hydra.core.config_store import ConfigStore
+from omegaconf import MISSING
 
+from src.pipelines.base_p2p_pipeline import BaseAceStepP2PEditPipeline
 from src.utils import logging
-from src.utils.structures import DiffusionParams
+from src.utils.structures import DiffusionParams, Prompt
 from src.utils.utils import set_random_seed, setup_exp_dir
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
 
+@dataclass
+class GenerateConfig:
+    checkpoint_dir: str = MISSING
+    save_dir: str = MISSING
+    exp_name: str = MISSING
+
+    debug_mode: bool = False
+    seed: int = 1
+    duration: int = -1
+
+    prompt: Prompt = MISSING
+    diffusion_params: DiffusionParams = MISSING
+
+
+cs = ConfigStore.instance()
+cs.store(name="generate", node=GenerateConfig)
+
+
 @hydra.main(version_base=None, config_path="src/configs", config_name="generate")
-def main(config):
-    set_random_seed(config.generate.seed)
+def main(cfg: GenerateConfig):
+    set_random_seed(cfg.seed)
 
-    # diffusion_params: DiffusionParams = instantiate(config.diffusion_params)
+    prompt = cfg.prompt
+    diffusion_params = cfg.diffusion_params
 
-    exp_dir = setup_exp_dir(config.generate)
+    exp_dir = setup_exp_dir(cfg)
 
-    # pipeline = ACEStepPipeline(checkpoint_dir=config.generate.checkpoint_dir)
+    pipeline = BaseAceStepP2PEditPipeline(checkpoint_dir=cfg.checkpoint_dir)
+    pipeline.text_to_music(
+        prompt=prompt,
+        diffusion_params=diffusion_params,
+        duration=cfg.duration,
+        save_path=exp_dir,
+        debug_mode=cfg.debug_mode,
+    )
 
-    # latents_rec2 = pipeline.diffusion_process(
-    #     input_latents=trajectory[0],
-    #     encoder_text_hidden_states=encoder_text_hidden_states,
-    #     text_attention_mask=text_attention_mask,
-    #     speaker_embds=speaker_embeds,
-    #     lyric_token_ids=lyric_token_idx,
-    #     lyric_mask=lyric_mask,
-    #     diffusion_params=diffusion_params,
-    # )
-
-    # pipeline.latents2audio(latents_rec2, save_path=exp_dir)
     logging.info(f"Music successfully generated and saved to: {exp_dir}")
 
 

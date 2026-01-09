@@ -1,0 +1,19 @@
+checkpoint_dir: ../ACE-Step
+save_dir: _exps/gen
+exp_name: try
+debug_mode: false
+seed: 1
+duration: -1
+prompt:
+  lyrics: Dancing in the fire, the rhythm takes control!
+  tags: pop, dance pop, energetic, catchy, synths, upbeat, female vocal, lively
+diffusion_params:
+  num_steps: 60
+  guidance_params:
+    type: APG
+    guidance_scale: 15.0
+    guidance_interval: 0.5
+    guidance_interval_decay: 1.0
+    min_guidance_scale: 3.0
+  omega_scale: 10.0
+  scheduler_type: Euler

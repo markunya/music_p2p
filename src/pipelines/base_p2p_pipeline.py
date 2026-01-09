@@ -1,3 +1,4 @@
+import random
 from typing import List, Optional
 
 import torch
@@ -9,14 +10,14 @@ from acestep.pipeline_ace_step import ACEStepPipeline
 from diffusers.pipelines.stable_diffusion_3.pipeline_stable_diffusion_3 import (
     retrieve_timesteps,
 )
+from diffusers.utils.torch_utils import randn_tensor
 from tqdm import tqdm
 
-import utils
 from src.p2p.attention_processor import CustomerAttnProcessorWithP2PController2_0
 from src.p2p.controllers import AttentionControl
 from src.schedulers import get_direct_scheduler
-from src.utils import logging
-from src.utils.structures import DiffusionParams
+from src.utils import diffusion_utils, logging
+from src.utils.structures import DiffusionParams, Prompt
 
 
 class BaseAceStepP2PEditPipeline(ACEStepPipeline):
@@ -200,7 +201,7 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
             (
                 current_guidance_scale,
                 is_in_guidance_interval,
-            ) = utils.diffusion_utils.compute_current_guidance(
+            ) = diffusion_utils.compute_current_guidance(
                 i, start_idx, end_idx, guidance_params
             )
 
@@ -230,7 +231,7 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
                     timestep=timestep,
                 ).sample
 
-                noise_pred = utils.diffusion_utils.mix_guidance(
+                noise_pred = diffusion_utils.mix_guidance(
                     cfg_type=guidance_params.type,
                     noise_cond=noise_pred_with_cond,
                     noise_null=noise_pred_uncond,
@@ -295,7 +296,7 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
         format: str = "wav",
         lora_name_or_path: str = "none",
         lora_weight: float = 1.0,
-        save_path: str = None,
+        save_path: Optional[str] = None,
         debug: bool = False,
     ):
         assert len(tags) == len(lyrics), "There must be same amount of tags and lyrics"
@@ -328,3 +329,43 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
 
         self.cleanup_memory()
         return output_paths
+
+    def text_to_music(
+        self,
+        prompt: Prompt,
+        diffusion_params: DiffusionParams,
+        duration: int = -1,
+        input_latents: Optional[torch.Tensor] = None,
+        null_embeds_per_step: Optional[List[torch.Tensor]] = None,
+        lora_name_or_path: str = "none",
+        lora_weight: float = 1.0,
+        save_path: Optional[str] = None,
+        debug_mode: bool = False,
+    ) -> List[str]:
+        tags = [prompt.tags]
+        lyrics = [prompt.lyrics]
+
+        if duration <= 0:
+            duration = random.uniform(30.0, 240.0)
+            logging.info(f"Random audio duration: {duration}")
+
+        if input_latents is None:
+            frame_length = int(duration * 44100 / 512 / 8)
+            input_latents = randn_tensor(
+                shape=(1, 8, 16, frame_length),
+                generator=None,
+                device=self.device,
+                dtype=self.dtype,
+            )
+
+        return self.forward(
+            input_latents,
+            null_embeds_per_step,
+            tags,
+            lyrics,
+            diffusion_params,
+            lora_name_or_path=lora_name_or_path,
+            lora_weight=lora_weight,
+            save_path=save_path,
+            debug=debug_mode,
+        )
