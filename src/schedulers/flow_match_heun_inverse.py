@@ -1,4 +1,4 @@
-from typing import Optional, Tuple, Union
+from typing import Tuple
 
 import numpy as np
 import torch
@@ -12,7 +12,7 @@ class FlowMatchHeunInverseDiscreteScheduler(FlowMatchHeunDiscreteScheduler):
     def set_timesteps(
         self,
         num_inference_steps: int = None,
-        device: Union[str, torch.device] = None,
+        device: str | torch.device | None = None,
         **kwargs,
     ):
         super().set_timesteps(
@@ -65,16 +65,16 @@ class FlowMatchHeunInverseDiscreteScheduler(FlowMatchHeunDiscreteScheduler):
     def step(
         self,
         model_output: torch.FloatTensor,
-        timestep: Union[float, torch.FloatTensor],
+        timestep: float | torch.FloatTensor,
         sample: torch.FloatTensor,
         s_churn: float = 0.0,
         s_tmin: float = 0.0,
         s_tmax: float = float("inf"),
         s_noise: float = 1.0,
-        generator: Optional[torch.Generator] = None,
+        generator: torch.Generator | None = None,
         return_dict: bool = True,
-        omega: Union[float, np.array] = 1.0,
-    ) -> Union[FlowMatchHeunDiscreteSchedulerOutput, Tuple]:
+        omega: float | np.ndarray = 1.0,
+    ) -> FlowMatchHeunDiscreteSchedulerOutput | Tuple:
         if (
             isinstance(timestep, int)
             or isinstance(timestep, torch.IntTensor)

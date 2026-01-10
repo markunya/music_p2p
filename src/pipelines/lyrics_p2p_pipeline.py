@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List
 
 import torch
 
@@ -16,7 +16,7 @@ class LyricsP2PEditPipeline(BaseAceStepP2PEditPipeline):
         diffusion_params: DiffusionParams,
         check_baseline: bool = False,
         debug_mode: bool = False,
-        save_path: Optional[str] = None,
+        save_path: str | None = None,
     ):
         tags = [src_prompt.tags, src_prompt.tags]
         lyrics = [src_prompt.lyrics, tgt_prompt.lyrics]

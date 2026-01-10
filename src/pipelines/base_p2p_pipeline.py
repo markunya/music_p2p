@@ -1,5 +1,5 @@
 import random
-from typing import List, Optional
+from typing import List
 
 import torch
 import torch.nn.functional as F
@@ -13,10 +13,12 @@ from diffusers.pipelines.stable_diffusion_3.pipeline_stable_diffusion_3 import (
 from diffusers.utils.torch_utils import randn_tensor
 from tqdm import tqdm
 
+from src.logging import utils as logging
+from src.logging.cometml import CometMLWriter
 from src.p2p.attention_processor import CustomerAttnProcessorWithP2PController2_0
 from src.p2p.controllers import AttentionControl
 from src.schedulers import get_direct_scheduler
-from src.utils import diffusion_utils, logging
+from src.utils import diffusion_utils
 from src.utils.structures import DiffusionParams, Prompt
 
 
@@ -24,12 +26,14 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
     def __init__(
         self,
         checkpoint_dir,
-        controller: Optional[AttentionControl] = None,
+        debug_mode: bool = False,
+        controller: AttentionControl | None = None,
+        writer: CometMLWriter | None = None,
         blocks_to_inject_idxs=None,
         dtype="bfloat16",
     ):
         super().__init__(checkpoint_dir, dtype=dtype)
-        self.controller: Optional[AttentionControl] = controller
+        self.controller: AttentionControl | None = controller
 
         if not self.loaded:
             logging.info("AceStep checkpoint not loaded, loading checkpoint...")
@@ -37,6 +41,9 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
                 self.load_quantized_checkpoint(self.checkpoint_dir)
             else:
                 self.load_checkpoint(self.checkpoint_dir)
+
+        self.debug_mode = debug_mode
+        self.writer = writer
 
         self.blocks_to_inject_idxs = blocks_to_inject_idxs
         if self.blocks_to_inject_idxs is None:
@@ -270,6 +277,37 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
 
         return target_latents
 
+    @cpu_offload("music_dcae")
+    def latents2audio(
+        self, latents, target_wav_duration_second=30, sample_rate=48000
+    ) -> List[torch.Tensor]:
+        pred_latents = latents
+        with torch.no_grad():
+            if self.overlapped_decode and target_wav_duration_second > 48:
+                _, pred_wavs = self.music_dcae.decode_overlap(
+                    pred_latents, sr=sample_rate
+                )
+            else:
+                _, pred_wavs = self.music_dcae.decode(pred_latents, sr=sample_rate)
+        pred_wavs = [pred_wav for pred_wav in pred_wavs]
+        return pred_wavs
+
+    def save_pred_wavs(
+        self, pred_wavs: List[torch.Tensor], save_path, format="wav", sample_rate=48000
+    ):
+        output_audio_paths = []
+        pred_wavs = [pred_wav.cpu().float() for pred_wav in pred_wavs]
+        for i in tqdm(range(len(pred_wavs))):
+            output_audio_path = self.save_wav_file(
+                pred_wavs[i],
+                i,
+                save_path=save_path,
+                sample_rate=sample_rate,
+                format=format,
+            )
+            output_audio_paths.append(output_audio_path)
+        return output_audio_paths
+
     def prepare_lyric_tokens(self, lyrics: List[str], debug: bool = False, max_len=512):
         token_lists = [self.tokenize_lyrics(lr, debug=debug) for lr in lyrics]
         if max_len is None:
@@ -296,7 +334,7 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
         format: str = "wav",
         lora_name_or_path: str = "none",
         lora_weight: float = 1.0,
-        save_path: Optional[str] = None,
+        save_path: str | None = None,
         debug: bool = False,
     ):
         assert len(tags) == len(lyrics), "There must be same amount of tags and lyrics"
@@ -321,25 +359,28 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
             diffusion_params=diffusion_params,
         )
 
-        output_paths = self.latents2audio(
-            latents=target_latents,
-            save_path=save_path,
-            format=format,
-        )
-
+        pred_wavs = self.latents2audio(latents=target_latents)
         self.cleanup_memory()
-        return output_paths
+
+        if save_path:
+            output_paths = self.save_pred_wavs(pred_wavs, save_path)
+            return output_paths
+
+        if self.writer is None:
+            logging.warning("Save path not specified and writer is None")
+
+        return None
 
     def text_to_music(
         self,
         prompt: Prompt,
         diffusion_params: DiffusionParams,
         duration: int = -1,
-        input_latents: Optional[torch.Tensor] = None,
-        null_embeds_per_step: Optional[List[torch.Tensor]] = None,
+        input_latents: torch.Tensor | None = None,
+        null_embeds_per_step: List[torch.Tensor] | None = None,
         lora_name_or_path: str = "none",
         lora_weight: float = 1.0,
-        save_path: Optional[str] = None,
+        save_path: str | None = None,
         debug_mode: bool = False,
     ) -> List[str]:
         tags = [prompt.tags]

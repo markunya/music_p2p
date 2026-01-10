@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from acestep.models.lyrics_utils.lyric_tokenizer import VoiceBpeTokenizer
 
-from src.utils import logging
+from src.logging import utils as logging
 from src.utils.utils import is_special_token
 
 structure_pattern = re.compile(r"\[.*?\]")

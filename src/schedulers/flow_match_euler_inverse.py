@@ -1,4 +1,4 @@
-from typing import List, Optional, Union
+from typing import List
 
 import numpy as np
 import torch
@@ -12,9 +12,9 @@ class FlowMatchEulerInverseDiscreteScheduler(FlowMatchEulerDiscreteScheduler):
     def set_timesteps(
         self,
         num_inference_steps: int = None,
-        device: Union[str, torch.device] = None,
-        sigmas: Optional[List[float]] = None,
-        mu: Optional[float] = None,
+        device: str | torch.device | None = None,
+        sigmas: List[float] | None = None,
+        mu: float | None = None,
     ):
         if self.config.use_dynamic_shifting and mu is None:
             raise ValueError("Need `mu` if use_dynamic_shifting=True")
@@ -60,15 +60,15 @@ class FlowMatchEulerInverseDiscreteScheduler(FlowMatchEulerDiscreteScheduler):
     def step(
         self,
         model_output: torch.FloatTensor,
-        timestep: Union[float, torch.FloatTensor],
+        timestep: float | torch.FloatTensor,
         sample: torch.FloatTensor,
         s_churn: float = 0.0,
         s_tmin: float = 0.0,
         s_tmax: float = float("inf"),
         s_noise: float = 1.0,
-        generator: Optional[torch.Generator] = None,
+        generator: torch.Generator | None = None,
         return_dict: bool = True,
-        omega: Union[float, np.array] = 0.0,
+        omega: float | np.ndarray = 0.0,
     ):
         if (
             isinstance(timestep, int)

@@ -4,11 +4,11 @@ import warnings
 import hydra
 from hydra.utils import instantiate
 
+from src.logging import utils as logging
 from src.nti.music2noise import music2noise
 from src.p2p.controllers import AttentionControl
 from src.pipelines.lyrics_p2p_pipeline import LyricsP2PEditPipeline
 from src.pipelines.tags_p2p_pipeline import TagsP2PEditPipeline
-from src.utils import logging
 from src.utils.structures import DiffusionParams, P2PTaskParams, dump
 from src.utils.utils import set_random_seed, setup_exp_dir
 

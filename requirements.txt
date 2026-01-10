@@ -2,3 +2,4 @@ ace_step @ git+https://github.com/ace-step/ACE-Step.git@6ae0852b1388de6dc0cca26b
 hydra-core
 pre-commit
 cattrs
+comet_ml

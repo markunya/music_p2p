@@ -1,5 +1,5 @@
 import math
-from typing import Optional, Tuple, Union
+from typing import Tuple
 
 import torch
 import torch.nn.functional as F
@@ -10,7 +10,7 @@ from src.p2p.controllers import AttentionControl
 
 
 class CustomerAttnProcessorWithP2PController2_0(CustomerAttnProcessor2_0):
-    def __init__(self, controller: Optional[AttentionControl]):
+    def __init__(self, controller: AttentionControl | None):
         super().__init__()
         self.controller = controller
 
@@ -58,10 +58,10 @@ class CustomerAttnProcessorWithP2PController2_0(CustomerAttnProcessor2_0):
         attn: Attention,
         hidden_states: torch.FloatTensor,
         encoder_hidden_states: torch.FloatTensor = None,
-        attention_mask: Optional[torch.FloatTensor] = None,
-        encoder_attention_mask: Optional[torch.FloatTensor] = None,
-        rotary_freqs_cis: Union[torch.Tensor, Tuple[torch.Tensor]] = None,
-        rotary_freqs_cis_cross: Union[torch.Tensor, Tuple[torch.Tensor]] = None,
+        attention_mask: torch.FloatTensor | None = None,
+        encoder_attention_mask: torch.FloatTensor | None = None,
+        rotary_freqs_cis: torch.Tensor | Tuple[torch.Tensor] = None,
+        rotary_freqs_cis_cross: torch.Tensor | Tuple[torch.Tensor] = None,
         *args,
         **kwargs,
     ) -> torch.Tensor:

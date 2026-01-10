@@ -1,6 +1,5 @@
 import abc
 import math
-from typing import Optional
 
 import torch
 
@@ -64,7 +63,7 @@ class AttentionStore(AttentionControl):
     def __init__(
         self,
         num_diffusion_steps: int,
-        step_callback: Optional[StepCallbackBase] = None,
+        step_callback: StepCallbackBase | None = None,
         running_mean_coef: float = 0.8,
     ):
         super().__init__(num_diffusion_steps)
@@ -79,7 +78,7 @@ class AttentionControlEdit(AttentionStore, abc.ABC):
         self,
         prompts,
         num_diffusion_steps: int,
-        step_callback: Optional[StepCallbackBase] = None,
+        step_callback: StepCallbackBase | None = None,
     ):
         super().__init__(num_diffusion_steps, step_callback)
         # batch_size = number of prompts (src + targets)
@@ -107,11 +106,11 @@ class AttentionControlReplace(AttentionControlEdit, abc.ABC):
         prompts,
         tokenizer,
         num_diffusion_steps: int,
-        step_callback: Optional[StepCallbackBase] = None,
+        step_callback: StepCallbackBase | None = None,
         eta_min: float = 0.0,
         eta_max: float = 1.0,
-        diffusion_step_start: Optional[int] = None,
-        diffusion_step_end: Optional[int] = None,
+        diffusion_step_start: int | None = None,
+        diffusion_step_end: int | None = None,
     ):
         super().__init__(prompts, num_diffusion_steps, step_callback)
         self.mapper, self.edit_mask = self._get_replacement_mapper(prompts, tokenizer)

@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from omegaconf import OmegaConf
 
-from src.utils import logging
+from src.logging import utils as logging
 
 
 def is_special_token(token: str):

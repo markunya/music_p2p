@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Any, List, Optional, Type, TypeVar
+from typing import Any, List, Type, TypeVar
 
 import cattrs
 import torch
@@ -42,8 +42,8 @@ class Prompt:
 
 @dataclass
 class P2PTaskParams:
-    music_path: Optional[str]
-    inverted_music_path: Optional[str]
+    music_path: str | None
+    inverted_music_path: str | None
     src: Prompt
     tgt: Prompt
 
@@ -76,4 +76,4 @@ class InvertedMusicData:
     prompt: Prompt
     diffusion_params: DiffusionParams
     noise: torch.Tensor
-    null_embeds_per_step: Optional[List[torch.Tensor]]
+    null_embeds_per_step: List[torch.Tensor] | None

@@ -1,0 +1,7 @@
+defaults:
+  - _self_
+
+debug_mode: false
+checkpoint_dir: "../ACE-Step"
+save_dir: "_exps/inv"
+seed: 1

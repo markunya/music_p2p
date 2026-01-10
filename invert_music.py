@@ -4,9 +4,9 @@ import warnings
 import hydra
 from hydra.utils import instantiate
 
+from src.logging import utils as logging
 from src.nti.music2noise import music2noise
 from src.pipelines.base_p2p_pipeline import BaseAceStepP2PEditPipeline
-from src.utils import logging
 from src.utils.structures import DiffusionParams, Prompt, dump
 from src.utils.utils import set_random_seed, setup_exp_dir
 

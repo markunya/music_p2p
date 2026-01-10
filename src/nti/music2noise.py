@@ -3,13 +3,12 @@ import torchaudio
 from diffusers.pipelines.stable_diffusion_3.pipeline_stable_diffusion_3 import (
     retrieve_timesteps,
 )
-from tqdm import tqdm
 
+from src.logging import utils as logging
 from src.nti.build_pivot_trajectory import build_pivot_trajectory
 from src.nti.null_text_inversion import null_text_optimization
 from src.pipelines.base_p2p_pipeline import BaseAceStepP2PEditPipeline
 from src.schedulers import get_direct_scheduler
-from src.utils import logging
 from src.utils.structures import DiffusionParams, InvertedMusicData, Prompt
 
 

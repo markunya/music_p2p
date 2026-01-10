@@ -6,8 +6,8 @@ import hydra
 from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING
 
+from src.logging import utils as logging
 from src.pipelines.base_p2p_pipeline import BaseAceStepP2PEditPipeline
-from src.utils import logging
 from src.utils.structures import DiffusionParams, Prompt
 from src.utils.utils import set_random_seed, setup_exp_dir
 
