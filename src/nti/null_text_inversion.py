@@ -144,7 +144,7 @@ def null_text_optimization(
             continue
 
         null_emb = base_null_emb.clone().detach().requires_grad_(True)
-        optimizer = Adam([null_emb], lr=lr * (1 - i / len(timesteps)))
+        optimizer = Adam([null_emb], lr=lr * (1 - i / (2 * len(timesteps))))
 
         for j in range(num_inner_steps):
             _reset_scheduler_at_t(scheduler, t)

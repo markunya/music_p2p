@@ -18,7 +18,7 @@ class SchedulerType(Enum):
     Heun = auto()
 
 
-_default_scheduler_params = {"num_train_timesteps": 1000, "shift": 3.0}
+_default_scheduler_params = {"num_train_timesteps": 1000, "shift": 1.0}
 _invalid_scheduler_type_msg = "Unsupported scheduler type: {scheduler_type}"
 
 

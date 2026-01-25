@@ -17,13 +17,13 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 @hydra.main(version_base=None, config_path="src/configs", config_name="edit")
 def main(config):
-    set_random_seed(config.edit.seed)
+    set_random_seed(config.seed)
 
     controller: AttentionControl = instantiate(config.controller)
     diffusion_params: DiffusionParams = instantiate(config.diffusion_params)
     p2p_task_params: P2PTaskParams = instantiate(config.p2p_task_params)
 
-    exp_dir = setup_exp_dir(config.edit)
+    exp_dir = setup_exp_dir(config)
 
     if controller.__class__.__name__.find("Tags") != -1:
         pipeline_cls = TagsP2PEditPipeline
@@ -31,7 +31,7 @@ def main(config):
         pipeline_cls = LyricsP2PEditPipeline
 
     pipeline = pipeline_cls(
-        checkpoint_dir=config.edit.checkpoint_dir,
+        checkpoint_dir=config.checkpoint_dir,
         controller=controller,
     )
 
@@ -48,7 +48,7 @@ def main(config):
             path=p2p_task_params.music_path,
             prompt=config.p2p_task_params.src,
             diffusion_params=diffusion_params,
-            debug_mode=config.edit.debug_mode,
+            debug_mode=config.debug_mode,
             audio_save_path=audio_save_path,
         )
         out_path = os.path.join(audio_save_path, "inverted_music_data.pth")

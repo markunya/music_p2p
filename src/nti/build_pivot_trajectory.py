@@ -4,7 +4,7 @@ from diffusers.pipelines.stable_diffusion_3.pipeline_stable_diffusion_3 import (
 )
 from tqdm import tqdm
 
-from src.schedulers import get_inverse_scheduler
+from src.schedulers import get_direct_scheduler
 from src.utils.structures import DiffusionParams
 
 
@@ -22,7 +22,7 @@ def build_pivot_trajectory(
 ):
     bsz = encoder_text_hidden_states.shape[0]
 
-    scheduler = get_inverse_scheduler(diffusion_params.scheduler_type)
+    scheduler = get_direct_scheduler(diffusion_params.scheduler_type)
     frame_length = target_latents.shape[-1]
 
     timesteps, num_inference_steps = retrieve_timesteps(
@@ -31,6 +31,8 @@ def build_pivot_trajectory(
         device=ace_step_transformer.device,
         timesteps=None,
     )
+    # timesteps[0] = timesteps[-1]
+    # timesteps = torch.roll(timesteps, shifts=-1)
 
     attention_mask = torch.ones(
         bsz,
@@ -48,8 +50,10 @@ def build_pivot_trajectory(
     )
 
     trajectory = [target_latents.detach().clone()]
-    for i, t in tqdm(
-        enumerate(timesteps),
+    scheduler._step_index = diffusion_params.num_steps - 1
+
+    for t in tqdm(
+        reversed(timesteps),
         total=num_inference_steps,
         desc="Building pivot trajectory...",
     ):
@@ -65,13 +69,14 @@ def build_pivot_trajectory(
         ).sample
 
         target_latents = scheduler.step(
-            model_output=noise_pred,
+            model_output=-noise_pred,
             timestep=t,
             sample=target_latents,
             return_dict=False,
             omega=diffusion_params.omega_scale,
             generator=random_generators[0] if random_generators else None,
         )[0]
+        scheduler._step_index -= 2
 
         trajectory.append(target_latents.detach().clone())
 

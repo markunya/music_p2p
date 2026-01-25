@@ -6,6 +6,7 @@ from typing import Any, List, Type, TypeVar
 
 import cattrs
 import torch
+from omegaconf import MISSING
 
 from src.schedulers import SchedulerType
 
@@ -32,6 +33,15 @@ def dump(obj: Any, path: str):
 def load(cls: Type[T], path: str, device: torch.device = None) -> T:
     dict_ = torch.load(path, device)
     return from_dict(dict_)
+
+
+@dataclass
+class BaseScriptConfig:
+    checkpoint_dir: str = MISSING
+    save_dir: str = MISSING
+    exp_name: str = MISSING
+    debug_mode: bool = False
+    seed: int = 1
 
 
 @dataclass

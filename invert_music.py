@@ -1,37 +1,48 @@
 import os
 import warnings
+from dataclasses import dataclass
 
 import hydra
-from hydra.utils import instantiate
+from hydra.core.config_store import ConfigStore
+from omegaconf import MISSING
 
 from src.logging import utils as logging
 from src.nti.music2noise import music2noise
 from src.pipelines.base_p2p_pipeline import BaseAceStepP2PEditPipeline
-from src.utils.structures import DiffusionParams, Prompt, dump
+from src.utils.structures import BaseScriptConfig, DiffusionParams, Prompt, dump
 from src.utils.utils import set_random_seed, setup_exp_dir
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
 
+@dataclass
+class InvertMusicConfig(BaseScriptConfig):
+    music_path: str = MISSING
+
+    prompt: Prompt = MISSING
+    diffusion_params: DiffusionParams = MISSING
+
+
+cs = ConfigStore.instance()
+cs.store(name="invert_music", node=InvertMusicConfig)
+
+
 @hydra.main(version_base=None, config_path="src/configs", config_name="invert_music")
-def main(config):
-    set_random_seed(config.invert_music.seed)
+def main(cfg: InvertMusicConfig):
+    set_random_seed(cfg.seed)
 
-    prompt: Prompt = instantiate(config.prompt)
-    diffusion_params: DiffusionParams = instantiate(config.diffusion_params)
-
-    exp_dir = setup_exp_dir(config.invert_music)
+    exp_dir = setup_exp_dir(cfg)
 
     pipeline = BaseAceStepP2PEditPipeline(
-        checkpoint_dir=config.edit.checkpoint_dir,
+        checkpoint_dir=cfg.checkpoint_dir, debug_mode=cfg.debug_mode
     )
 
     inverted_music_data = music2noise(
         pipeline=pipeline,
-        music_path=config.invert_music.music_path,
-        prompt=prompt,
-        diffusion_params=diffusion_params,
-        debug_mode=config.invert_music.debug_mode,
+        music_path=cfg.music_path,
+        prompt=cfg.prompt,
+        diffusion_params=cfg.diffusion_params,
+        debug_mode=cfg.debug_mode,
         audio_save_path=exp_dir,
     )
 

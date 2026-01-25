@@ -27,9 +27,7 @@ def music2noise(
     )
 
     speaker_embeds = torch.zeros(1, 512).to(device=device, dtype=dtype)
-    lyric_token_idx, lyric_mask = pipeline.prepare_lyric_tokens(
-        [prompt.lyrics], debug=False
-    )
+    lyric_token_idx, lyric_mask = pipeline.prepare_lyric_tokens([prompt.lyrics])
 
     wav, sr = torchaudio.load(music_path)
     latents, _ = pipeline.music_dcae.encode(wav.unsqueeze(0).to(device), sr=sr)
@@ -100,7 +98,9 @@ def music2noise(
         logging.debug(
             f"MAE after null text optimization (guidance): {(latents_rec2 - latents).abs().mean()}"
         )
-        pipeline.latents2audio(latents_rec2, save_path=audio_save_path)
+
+        pred_wavs = pipeline.latents2audio(latents_rec2)
+        pipeline.save_pred_wavs(pred_wavs, audio_save_path)
 
     return InvertedMusicData(
         noise=trajectory[0],

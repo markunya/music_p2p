@@ -28,9 +28,11 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
         checkpoint_dir,
         debug_mode: bool = False,
         controller: AttentionControl | None = None,
+        tags_max_length: int = 128,
+        lyrics_max_length: int = 512,
         writer: CometMLWriter | None = None,
         blocks_to_inject_idxs=None,
-        dtype="bfloat16",
+        dtype="float32",
     ):
         super().__init__(checkpoint_dir, dtype=dtype)
         self.controller: AttentionControl | None = controller
@@ -49,14 +51,17 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
         if self.blocks_to_inject_idxs is None:
             self.blocks_to_inject_idxs = list(range(24))
 
+        self.tags_max_length = tags_max_length
+        self.lyrics_max_length = lyrics_max_length
+
     @cpu_offload("text_encoder_model")
-    def get_text_embeddings(self, texts, text_max_length=128):
+    def get_text_embeddings(self, texts):
         inputs = self.text_tokenizer(
             texts,
             return_tensors="pt",
             padding="max_length",
             truncation=True,
-            max_length=text_max_length,
+            max_length=self.tags_max_length,
         )
         inputs = {key: value.to(self.device) for key, value in inputs.items()}
         if self.text_encoder_model.device != self.device:
@@ -68,15 +73,13 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
         return last_hidden_states, attention_mask
 
     @cpu_offload("text_encoder_model")
-    def get_text_embeddings_null(
-        self, texts, text_max_length=128, tau=0.01, l_min=8, l_max=10
-    ):
+    def get_text_embeddings_null(self, texts, tau=0.01, l_min=8, l_max=10):
         inputs = self.text_tokenizer(
             texts,
             return_tensors="pt",
             padding="max_length",
             truncation=True,
-            max_length=text_max_length,
+            max_length=self.tags_max_length,
         )
         inputs = {key: value.to(self.device) for key, value in inputs.items()}
         if self.text_encoder_model.device != self.device:
@@ -308,8 +311,10 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
             output_audio_paths.append(output_audio_path)
         return output_audio_paths
 
-    def prepare_lyric_tokens(self, lyrics: List[str], debug: bool = False, max_len=512):
-        token_lists = [self.tokenize_lyrics(lr, debug=debug) for lr in lyrics]
+    def prepare_lyric_tokens(self, lyrics: List[str]):
+        token_lists = [self.tokenize_lyrics(lr) for lr in lyrics]
+
+        max_len = self.lyrics_max_length
         if max_len is None:
             max_len = max(len(toks) for toks in token_lists)
 
@@ -331,11 +336,9 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
         tags: List[str],
         lyrics: List[str],
         diffusion_params: DiffusionParams,
-        format: str = "wav",
         lora_name_or_path: str = "none",
         lora_weight: float = 1.0,
         save_path: str | None = None,
-        debug: bool = False,
     ):
         assert len(tags) == len(lyrics), "There must be same amount of tags and lyrics"
         bsz = len(tags)
@@ -345,7 +348,7 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
         encoder_text_hidden_states, text_attention_mask = self.get_text_embeddings(tags)
 
         speaker_embeds = torch.zeros(bsz, 512).to(self.device).to(self.dtype)
-        lyric_token_idx, lyric_mask = self.prepare_lyric_tokens(lyrics, debug=debug)
+        lyric_token_idx, lyric_mask = self.prepare_lyric_tokens(lyrics)
 
         target_latents = self.diffusion_process(
             input_latents=input_latents,
@@ -381,7 +384,6 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
         lora_name_or_path: str = "none",
         lora_weight: float = 1.0,
         save_path: str | None = None,
-        debug_mode: bool = False,
     ) -> List[str]:
         tags = [prompt.tags]
         lyrics = [prompt.lyrics]
@@ -408,5 +410,4 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
             lora_name_or_path=lora_name_or_path,
             lora_weight=lora_weight,
             save_path=save_path,
-            debug=debug_mode,
         )

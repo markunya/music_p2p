@@ -1,6 +1,7 @@
 defaults:
   - _self_
 
+music_path: ""
 debug_mode: false
 checkpoint_dir: "../ACE-Step"
 save_dir: "_exps/inv"

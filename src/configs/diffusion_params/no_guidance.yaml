@@ -1,7 +1,7 @@
 num_steps: 60
 guidance_params:
   type: APG
-  guidance_scale: 15.0
+  guidance_scale: 1.0
   guidance_interval: 0.5
   guidance_interval_decay: 1.0
   min_guidance_scale: 3.0

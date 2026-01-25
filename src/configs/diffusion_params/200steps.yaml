@@ -1,4 +1,4 @@
-num_steps: 60
+num_steps: 200
 guidance_params:
   type: APG
   guidance_scale: 15.0
