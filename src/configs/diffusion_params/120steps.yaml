@@ -1,6 +1,6 @@
 num_steps: 120
 guidance_params:
-  type: APG
+  type: CFG
   guidance_scale: 15.0
   guidance_interval: 0.5
   guidance_interval_decay: 1.0

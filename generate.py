@@ -2,6 +2,7 @@ import warnings
 from dataclasses import dataclass
 
 import hydra
+import torch
 from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING
 
@@ -33,19 +34,28 @@ def main(cfg: GenerateConfig):
     prompt = cfg.prompt
     diffusion_params = cfg.diffusion_params
 
+    input_latents = None
+    null_embeds_per_step = None
+    if cfg.latents_path:
+        data = torch.load(cfg.latents_path)
+        input_latents = data["noise"]
+        null_embeds_per_step = data["null_embeds_per_step"]
+
     exp_dir = setup_exp_dir(cfg)
 
     pipeline = BaseAceStepP2PEditPipeline(
         checkpoint_dir=cfg.checkpoint_dir, debug_mode=cfg.debug_mode
     )
-    output_paths = pipeline.text_to_music(
+    out = pipeline.text_to_music(
         prompt=prompt,
         diffusion_params=diffusion_params,
+        input_latents=input_latents,
+        null_embeds_per_step=null_embeds_per_step,
         duration=cfg.duration,
         save_path=exp_dir,
     )
 
-    logging.info(f"Music successfully generated and saved to: {output_paths}")
+    logging.info(f"Music successfully generated and saved to: {out[0]}")
 
 
 if __name__ == "__main__":

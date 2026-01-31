@@ -8,6 +8,7 @@ from omegaconf import MISSING
 
 from src.logging import utils as logging
 from src.nti.music2noise import music2noise
+from src.nti.null_text_inversion import NullTextOptimization
 from src.pipelines.base_p2p_pipeline import BaseAceStepP2PEditPipeline
 from src.utils.structures import BaseScriptConfig, DiffusionParams, Prompt, dump
 from src.utils.utils import set_random_seed, setup_exp_dir
@@ -17,6 +18,10 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 @dataclass
 class InvertMusicConfig(BaseScriptConfig):
+    learning_rate: float = 1e-3
+    num_inner_steps: int = 15
+    epsilon: float = 1e-7
+
     music_path: str = MISSING
 
     prompt: Prompt = MISSING
@@ -37,11 +42,20 @@ def main(cfg: InvertMusicConfig):
         checkpoint_dir=cfg.checkpoint_dir, debug_mode=cfg.debug_mode
     )
 
+    nti = NullTextOptimization(
+        model=pipeline.ace_step_transformer,
+        lr=cfg.learning_rate,
+        num_inner_steps=cfg.num_inner_steps,
+        epsilon=cfg.epsilon,
+        debug_mode=cfg.debug_mode,
+    )
+
     inverted_music_data = music2noise(
         pipeline=pipeline,
         music_path=cfg.music_path,
         prompt=cfg.prompt,
         diffusion_params=cfg.diffusion_params,
+        nti=nti,
         debug_mode=cfg.debug_mode,
         audio_save_path=exp_dir,
     )

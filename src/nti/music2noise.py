@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import torch
 import torchaudio
 from diffusers.pipelines.stable_diffusion_3.pipeline_stable_diffusion_3 import (
@@ -6,10 +8,15 @@ from diffusers.pipelines.stable_diffusion_3.pipeline_stable_diffusion_3 import (
 
 from src.logging import utils as logging
 from src.nti.build_pivot_trajectory import build_pivot_trajectory
-from src.nti.null_text_inversion import null_text_optimization
+from src.nti.null_text_inversion import NullTextOptimization
 from src.pipelines.base_p2p_pipeline import BaseAceStepP2PEditPipeline
 from src.schedulers import get_direct_scheduler
-from src.utils.structures import DiffusionParams, InvertedMusicData, Prompt
+from src.utils.structures import (
+    DiffusionOut,
+    DiffusionParams,
+    InvertedMusicData,
+    Prompt,
+)
 
 
 def music2noise(
@@ -17,6 +24,7 @@ def music2noise(
     music_path: str,
     prompt: Prompt,
     diffusion_params: DiffusionParams,
+    nti: NullTextOptimization,
     debug_mode: bool = False,
     audio_save_path: str = None,
 ) -> InvertedMusicData:
@@ -32,7 +40,7 @@ def music2noise(
     wav, sr = torchaudio.load(music_path)
     latents, _ = pipeline.music_dcae.encode(wav.unsqueeze(0).to(device), sr=sr)
 
-    trajectory = build_pivot_trajectory(
+    building_pivot_out = build_pivot_trajectory(
         pipeline.ace_step_transformer,
         target_latents=latents,
         encoder_text_hidden_states=encoder_text_hidden_states,
@@ -43,20 +51,25 @@ def music2noise(
         diffusion_params=diffusion_params,
         random_generators=None,
     )
+    pivot_trajectory = building_pivot_out.trajectory
+
     if debug_mode:
-        latents_rec = pipeline.diffusion_process(
-            input_latents=trajectory[0],
+        diffusion_params_no_guidance = deepcopy(diffusion_params)
+        diffusion_params_no_guidance.guidance_params.guidance_scale = 1.0
+
+        diffusion_out = pipeline.diffusion_process(
+            input_latents=pivot_trajectory[0],
             encoder_text_hidden_states=encoder_text_hidden_states,
             text_attention_mask=text_attention_mask,
             speaker_embds=speaker_embeds,
             lyric_token_ids=lyric_token_idx,
             lyric_mask=lyric_mask,
-            diffusion_params=diffusion_params,
+            diffusion_params=diffusion_params_no_guidance,
             random_generators=None,
         )
 
         logging.info(
-            f"MAE after building pivot (no guidance): {(latents_rec - latents).abs().mean()}"
+            f"MAE after building pivot (no guidance): {(diffusion_out.trajectory[0] - latents).abs().mean()}"
         )
 
     scheduler = get_direct_scheduler(diffusion_params.scheduler_type)
@@ -66,9 +79,8 @@ def music2noise(
         device=device,
     )
 
-    null_embeddings_per_step, losses_per_step = null_text_optimization(
-        pipeline.ace_step_transformer,
-        trajectory=trajectory,
+    null_embeddings_per_step = nti.run(
+        trajectory=pivot_trajectory,
         timesteps=timesteps,
         scheduler=scheduler,
         encoder_text_hidden_states=encoder_text_hidden_states,
@@ -81,10 +93,8 @@ def music2noise(
     )
 
     if debug_mode:
-        logging.debug(f"Losses per step: {losses_per_step}")
-
-        latents_rec2 = pipeline.diffusion_process(
-            input_latents=trajectory[0],
+        diffusion_out = pipeline.diffusion_process(
+            input_latents=pivot_trajectory[0],
             encoder_text_hidden_states=encoder_text_hidden_states,
             text_attention_mask=text_attention_mask,
             speaker_embds=speaker_embeds,
@@ -96,14 +106,14 @@ def music2noise(
         )
 
         logging.debug(
-            f"MAE after null text optimization (guidance): {(latents_rec2 - latents).abs().mean()}"
+            f"MAE after null text optimization (guidance): {(diffusion_out.trajectory[0] - latents).abs().mean()}"
         )
 
-        pred_wavs = pipeline.latents2audio(latents_rec2)
+        pred_wavs = pipeline.latents2audio(diffusion_out.trajectory[-1])
         pipeline.save_pred_wavs(pred_wavs, audio_save_path)
 
     return InvertedMusicData(
-        noise=trajectory[0],
+        noise=pivot_trajectory[0],
         null_embeds_per_step=null_embeddings_per_step,
         prompt=prompt,
         diffusion_params=diffusion_params,

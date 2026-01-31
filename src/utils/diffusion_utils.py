@@ -1,5 +1,5 @@
 import torch
-from acestep.apg_guidance import apg_forward, cfg_forward, cfg_zero_star
+from acestep.apg_guidance import cfg_forward
 
 from src.utils.structures import CfgType, GuidanceParams
 
@@ -9,34 +9,34 @@ def mix_guidance(
     noise_cond: torch.Tensor,
     noise_null: torch.Tensor,
     gscale: float,
-    momentum_buffer=None,
-    i=None,
+    # momentum_buffer=None,
+    # i=None,
 ):
     match cfg_type:
-        case CfgType.APG:
-            return apg_forward(
-                pred_cond=noise_cond,
-                pred_uncond=noise_null,
-                guidance_scale=gscale,
-                momentum_buffer=momentum_buffer,
-            )
-        case CfgType.APG:
+        case CfgType.CFG:
             return cfg_forward(
                 cond_output=noise_cond,
                 uncond_output=noise_null,
                 cfg_strength=gscale,
             )
-        case CfgType.CFG_STAR:
-            return cfg_zero_star(
-                noise_pred_with_cond=noise_cond,
-                noise_pred_uncond=noise_null,
-                guidance_scale=gscale,
-                i=0 if i is None else i,
-                zero_steps=1,
-                use_zero_init=True,
-            )
+        # case CfgType.APG:
+        #     return apg_forward(
+        #         pred_cond=noise_cond,
+        #         pred_uncond=noise_null,
+        #         guidance_scale=gscale,
+        #         momentum_buffer=momentum_buffer,
+        #     )
+        # case CfgType.CFG_STAR:
+        #     return cfg_zero_star(
+        #         noise_pred_with_cond=noise_cond,
+        #         noise_pred_uncond=noise_null,
+        #         guidance_scale=gscale,
+        #         i=0 if i is None else i,
+        #         zero_steps=1,
+        #         use_zero_init=True,
+        #     )
         case _:
-            raise ValueError(f"Unknown cfg_type: {cfg_type}")
+            raise ValueError(f"Unsupported cfg_type: {cfg_type}")
 
 
 def compute_current_guidance(

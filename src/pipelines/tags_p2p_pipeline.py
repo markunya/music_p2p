@@ -24,7 +24,7 @@ class TagsP2PEditPipeline(BaseAceStepP2PEditPipeline):
             lyrics.append(src_prompt.lyrics)
             tags.append(tgt_prompt.tags)
 
-        output_paths = self.forward(
+        diffusion_out = self.forward(
             input_latents=noise,
             null_embeds_per_step=null_embeds_per_step,
             tags=tags,
@@ -34,4 +34,4 @@ class TagsP2PEditPipeline(BaseAceStepP2PEditPipeline):
             save_path=save_path,
         )
 
-        return output_paths
+        return diffusion_out

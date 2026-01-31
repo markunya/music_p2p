@@ -19,7 +19,7 @@ from src.p2p.attention_processor import CustomerAttnProcessorWithP2PController2_
 from src.p2p.controllers import AttentionControl
 from src.schedulers import get_direct_scheduler
 from src.utils import diffusion_utils
-from src.utils.structures import DiffusionParams, Prompt
+from src.utils.structures import DiffusionOut, DiffusionParams, Prompt
 
 
 class BaseAceStepP2PEditPipeline(ACEStepPipeline):
@@ -140,7 +140,7 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
         diffusion_params: DiffusionParams,
         random_generators=None,
         null_embeddings_per_step=None,
-    ):
+    ) -> DiffusionOut:
         logging.info("Diffusion params:")
         logging.log_structure(diffusion_params)
 
@@ -205,6 +205,8 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
 
         target_latents = input_latents
 
+        trajectory = [input_latents]
+        model_outs = []
         for i, t in tqdm(enumerate(timesteps), total=num_inference_steps):
             # expand the latents if we are doing classifier free guidance
             latents = target_latents
@@ -263,6 +265,7 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
                     output_length=latent_model_input.shape[-1],
                     timestep=timestep,
                 ).sample
+                model_outs.append(noise_pred)
                 self.unregister_controller()
 
             target_latents = scheduler.step(
@@ -273,12 +276,13 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
                 omega=diffusion_params.omega_scale,
                 generator=random_generators[0] if random_generators else None,
             )[0]
+            trajectory.append(target_latents)
 
             if self.controller is not None:
                 self.set_diffusion_step_to_controller(i + 1)
                 target_latents = self.controller.step_callback(target_latents)
 
-        return target_latents
+        return DiffusionOut(trajectory=trajectory, model_outs=model_outs)
 
     @cpu_offload("music_dcae")
     def latents2audio(
@@ -309,7 +313,6 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
                 format=format,
             )
             output_audio_paths.append(output_audio_path)
-        return output_audio_paths
 
     def prepare_lyric_tokens(self, lyrics: List[str]):
         token_lists = [self.tokenize_lyrics(lr) for lr in lyrics]
@@ -339,7 +342,7 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
         lora_name_or_path: str = "none",
         lora_weight: float = 1.0,
         save_path: str | None = None,
-    ):
+    ) -> DiffusionOut:
         assert len(tags) == len(lyrics), "There must be same amount of tags and lyrics"
         bsz = len(tags)
 
@@ -350,7 +353,7 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
         speaker_embeds = torch.zeros(bsz, 512).to(self.device).to(self.dtype)
         lyric_token_idx, lyric_mask = self.prepare_lyric_tokens(lyrics)
 
-        target_latents = self.diffusion_process(
+        diffusion_out = self.diffusion_process(
             input_latents=input_latents,
             null_embeddings_per_step=null_embeds_per_step,
             encoder_text_hidden_states=encoder_text_hidden_states,
@@ -362,17 +365,13 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
             diffusion_params=diffusion_params,
         )
 
-        pred_wavs = self.latents2audio(latents=target_latents)
+        pred_wavs = self.latents2audio(latents=diffusion_out.trajectory[-1])
         self.cleanup_memory()
 
         if save_path:
-            output_paths = self.save_pred_wavs(pred_wavs, save_path)
-            return output_paths
+            self.save_pred_wavs(pred_wavs, save_path)
 
-        if self.writer is None:
-            logging.warning("Save path not specified and writer is None")
-
-        return None
+        return diffusion_out
 
     def text_to_music(
         self,
@@ -384,15 +383,15 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
         lora_name_or_path: str = "none",
         lora_weight: float = 1.0,
         save_path: str | None = None,
-    ) -> List[str]:
+    ) -> DiffusionOut:
         tags = [prompt.tags]
         lyrics = [prompt.lyrics]
 
-        if duration <= 0:
-            duration = random.uniform(30.0, 240.0)
-            logging.info(f"Random audio duration: {duration}")
-
         if input_latents is None:
+            if duration <= 0:
+                duration = random.uniform(30.0, 240.0)
+                logging.info(f"Random audio duration: {duration}")
+
             frame_length = int(duration * 44100 / 512 / 8)
             input_latents = randn_tensor(
                 shape=(1, 8, 16, frame_length),

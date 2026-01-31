@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Any, List, Type, TypeVar
+from typing import Any, Type, TypeVar
 
 import cattrs
 import torch
@@ -86,4 +86,10 @@ class InvertedMusicData:
     prompt: Prompt
     diffusion_params: DiffusionParams
     noise: torch.Tensor
-    null_embeds_per_step: List[torch.Tensor] | None
+    null_embeds_per_step: list[torch.Tensor] | None
+
+
+@dataclass
+class DiffusionOut:
+    trajectory: list[torch.Tensor]
+    model_outs: list[torch.Tensor]
