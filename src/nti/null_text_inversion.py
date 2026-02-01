@@ -6,6 +6,7 @@ from torch.optim import Adam
 from tqdm import tqdm
 
 from src.logging import utils as logging
+from src.logging.writer import BaseWriter, DummyWriter
 from src.utils.diffusion_utils import (
     GuidanceParams,
     compute_current_guidance,
@@ -15,13 +16,20 @@ from src.utils.diffusion_utils import (
 
 class NullTextOptimization:
     def __init__(
-        self, model, lr=1e-2, num_inner_steps=15, epsilon=1e-7, debug_mode=False
+        self,
+        model,
+        lr=1e-2,
+        num_inner_steps=15,
+        epsilon=1e-7,
+        debug_mode=False,
+        writer: BaseWriter = DummyWriter(),
     ):
         self._model = model
         self._lr = lr
         self._num_inner_steps = num_inner_steps
         self._epsilon = epsilon
         self._debug_mode = debug_mode
+        self._writer = writer
 
     @torch.no_grad()
     def _encode_pair(
@@ -151,7 +159,7 @@ class NullTextOptimization:
                 continue
 
             null_emb = base_null_emb.clone().detach().requires_grad_(True)
-            optimizer = Adam([null_emb], lr=lr * (1 - i / (2 * len(timesteps))))
+            optimizer = Adam([null_emb], lr=lr)  # lr * (1 - i / (2 * len(timesteps))) ?
 
             for j in range(num_inner_steps):
                 self._reset_scheduler_at_t(scheduler, t)
@@ -191,6 +199,9 @@ class NullTextOptimization:
                     break
 
             if self._debug_mode:
+                self._writer.set_step(i)
+                self._writer.add_scalar("nti_loss", loss.item())
+                self._writer.add_scalar("null_emb_norm", torch.norm(null_emb).item())
                 logging.debug(f"NTI loss on step {i}: {loss.item()}")
 
             null_embeddings_per_step.append(null_emb.detach().clone())

@@ -7,6 +7,7 @@ from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING
 
 from src.logging import utils as logging
+from src.logging.writer import setup_writer
 from src.nti.music2noise import music2noise
 from src.nti.null_text_inversion import NullTextOptimization
 from src.pipelines.base_p2p_pipeline import BaseAceStepP2PEditPipeline
@@ -37,9 +38,10 @@ def main(cfg: InvertMusicConfig):
     set_random_seed(cfg.seed)
 
     exp_dir = setup_exp_dir(cfg)
+    writer = setup_writer(cfg)
 
     pipeline = BaseAceStepP2PEditPipeline(
-        checkpoint_dir=cfg.checkpoint_dir, debug_mode=cfg.debug_mode
+        checkpoint_dir=cfg.checkpoint_dir, debug_mode=cfg.debug_mode, writer=writer
     )
 
     nti = NullTextOptimization(
@@ -48,6 +50,7 @@ def main(cfg: InvertMusicConfig):
         num_inner_steps=cfg.num_inner_steps,
         epsilon=cfg.epsilon,
         debug_mode=cfg.debug_mode,
+        writer=writer,
     )
 
     inverted_music_data = music2noise(
@@ -56,6 +59,7 @@ def main(cfg: InvertMusicConfig):
         prompt=cfg.prompt,
         diffusion_params=cfg.diffusion_params,
         nti=nti,
+        writer=writer,
         debug_mode=cfg.debug_mode,
         audio_save_path=exp_dir,
     )

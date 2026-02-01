@@ -7,6 +7,7 @@ from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING
 
 from src.logging import utils as logging
+from src.logging.writer import setup_writer
 from src.pipelines.base_p2p_pipeline import BaseAceStepP2PEditPipeline
 from src.utils.structures import BaseScriptConfig, DiffusionParams, Prompt
 from src.utils.utils import set_random_seed, setup_exp_dir
@@ -44,9 +45,11 @@ def main(cfg: GenerateConfig):
     exp_dir = setup_exp_dir(cfg)
 
     pipeline = BaseAceStepP2PEditPipeline(
-        checkpoint_dir=cfg.checkpoint_dir, debug_mode=cfg.debug_mode
+        checkpoint_dir=cfg.checkpoint_dir,
+        debug_mode=cfg.debug_mode,
+        writer=setup_writer(cfg),
     )
-    out = pipeline.text_to_music(
+    pipeline.text_to_music(
         prompt=prompt,
         diffusion_params=diffusion_params,
         input_latents=input_latents,
@@ -54,8 +57,6 @@ def main(cfg: GenerateConfig):
         duration=cfg.duration,
         save_path=exp_dir,
     )
-
-    logging.info(f"Music successfully generated and saved to: {out[0]}")
 
 
 if __name__ == "__main__":

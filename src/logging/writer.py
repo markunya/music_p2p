@@ -1,9 +1,11 @@
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum, auto
 
+from omegaconf import DictConfig, OmegaConf
+
 from src.logging import utils as logging
-from src.utils.structures import to_dict
 
 
 class ExperimentMode(Enum):
@@ -19,39 +21,80 @@ class CometMLConfig:
     mode: ExperimentMode
 
 
-class CometMLWriter:
+class BaseWriter(ABC):
+    @abstractmethod
+    def set_step(self, step):
+        raise NotImplementedError
+
+    @abstractmethod
+    def add_scalar(self, scalar_name, scalar):
+        raise NotImplementedError
+
+    @abstractmethod
+    def add_scalars(self, scalars):
+        raise NotImplementedError
+
+    @abstractmethod
+    def add_audio(self, audio_name, audio, sample_rate=None):
+        raise NotImplementedError
+
+    @abstractmethod
+    def add_image(self, image_name, image):
+        raise NotImplementedError
+
+
+class DummyWriter(BaseWriter):
+    def set_step(self, step):
+        pass
+
+    def add_scalar(self, scalar_name, scalar):
+        pass
+
+    def add_scalars(self, scalars):
+        pass
+
+    def add_audio(self, audio_name, audio, sample_rate=None):
+        pass
+
+    def add_image(self, image_name, image):
+        pass
+
+
+class CometMLWriter(BaseWriter):
     """
     Class for experiment tracking via CometML.
 
     See https://www.comet.com/docs/v2/.
     """
 
-    def __init__(self, config):
+    def __init__(self, project_config):
         try:
             import comet_ml
 
+            from src.utils.structures import to_dict
+
             comet_ml.login()
 
-            writer_config: CometMLConfig = config.writer
-            match writer_config.mode:
+            config = project_config.writer
+            match config.mode:
                 case ExperimentMode.Offline:
                     exp_class = comet_ml.OfflineExperiment
                 case ExperimentMode.Online:
                     exp_class = comet_ml.Experiment
                 case _:
-                    raise ValueError(f"Invalid mode value: {writer_config.mode}")
+                    raise ValueError(f"Invalid mode value: {config.mode}")
 
             self.exp = exp_class(
-                project_name=writer_config.project_name,
-                workspace=writer_config.workspace,
+                project_name=config.project_name,
+                workspace=config.workspace,
                 experiment_key=None,
                 log_code=False,
                 log_graph=False,
                 auto_metric_logging=False,
                 auto_param_logging=False,
             )
-            self.exp.set_name(writer_config.run_name)
-            self.exp.log_parameters(parameters=to_dict(config))
+            self.exp.set_name(config.run_name)
+            self.exp.log_parameters(parameters=to_dict(project_config))
 
             self.comel_ml = comet_ml
 
@@ -117,7 +160,7 @@ class CometMLWriter:
         """
         self.exp.log_image(image_data=image, name=image_name, step=self.step)
 
-    def add_audio(self, audio_name, audio, sample_rate=None):
+    def add_audio(self, audio_name, audio, sample_rate=16000):
         """
         Log an audio to the experiment tracker.
 
@@ -128,8 +171,15 @@ class CometMLWriter:
         """
         audio = audio.detach().cpu().numpy().T
         self.exp.log_audio(
-            file_name=audio_name,
-            audio_data=audio,
-            sample_rate=sample_rate,
-            step=self.step,
+            file_name=audio_name, audio_data=audio, sample_rate=sample_rate
         )
+
+
+def setup_writer(cfg):
+    if cfg.writer is None:
+        return DummyWriter()
+    if isinstance(cfg.writer, DictConfig):
+        writer_cfg = OmegaConf.to_object(cfg.writer)
+    if isinstance(writer_cfg, CometMLConfig):
+        return CometMLWriter(cfg)
+    raise ValueError(f"Not supportd writer config type: {type(writer_cfg)}")

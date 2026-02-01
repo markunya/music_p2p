@@ -3,7 +3,6 @@ from typing import List
 
 import torch
 import torch.nn.functional as F
-from acestep.apg_guidance import MomentumBuffer
 from acestep.cpu_offload import cpu_offload
 from acestep.models.customer_attention_processor import CustomerAttnProcessor2_0
 from acestep.pipeline_ace_step import ACEStepPipeline
@@ -14,7 +13,7 @@ from diffusers.utils.torch_utils import randn_tensor
 from tqdm import tqdm
 
 from src.logging import utils as logging
-from src.logging.cometml import CometMLWriter
+from src.logging.writer import BaseWriter, DummyWriter
 from src.p2p.attention_processor import CustomerAttnProcessorWithP2PController2_0
 from src.p2p.controllers import AttentionControl
 from src.schedulers import get_direct_scheduler
@@ -30,7 +29,7 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
         controller: AttentionControl | None = None,
         tags_max_length: int = 128,
         lyrics_max_length: int = 512,
-        writer: CometMLWriter | None = None,
+        writer: BaseWriter = DummyWriter(),
         blocks_to_inject_idxs=None,
         dtype="float32",
     ):
@@ -180,8 +179,6 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
             f"start_idx: {start_idx}, end_idx: {end_idx}, num_inference_steps: {num_inference_steps}"
         )
 
-        momentum_buffer = MomentumBuffer()
-
         # P(speaker, text, lyric)
         encoder_hidden_states, encoder_hidden_mask = self.ace_step_transformer.encode(
             encoder_text_hidden_states,
@@ -248,8 +245,6 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
                     noise_cond=noise_pred_with_cond,
                     noise_null=noise_pred_uncond,
                     gscale=current_guidance_scale,
-                    momentum_buffer=momentum_buffer,
-                    i=i,
                 )
 
             else:
@@ -286,7 +281,7 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
 
     @cpu_offload("music_dcae")
     def latents2audio(
-        self, latents, target_wav_duration_second=30, sample_rate=48000
+        self, latents, target_wav_duration_second=30, sample_rate=16000
     ) -> List[torch.Tensor]:
         pred_latents = latents
         with torch.no_grad():
@@ -300,7 +295,7 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
         return pred_wavs
 
     def save_pred_wavs(
-        self, pred_wavs: List[torch.Tensor], save_path, format="wav", sample_rate=48000
+        self, pred_wavs: List[torch.Tensor], save_path, format="wav", sample_rate=16000
     ):
         output_audio_paths = []
         pred_wavs = [pred_wav.cpu().float() for pred_wav in pred_wavs]
@@ -332,21 +327,36 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
 
         return lyric_token_ids, lyric_mask
 
-    def forward(
+    def text_to_music(
         self,
-        input_latents: torch.Tensor,
-        null_embeds_per_step: List[torch.Tensor],
-        tags: List[str],
-        lyrics: List[str],
+        prompt: Prompt,
         diffusion_params: DiffusionParams,
+        duration: int = -1,
+        input_latents: torch.Tensor | None = None,
+        null_embeds_per_step: List[torch.Tensor] | None = None,
         lora_name_or_path: str = "none",
         lora_weight: float = 1.0,
         save_path: str | None = None,
     ) -> DiffusionOut:
+        tags = [prompt.tags]
+        lyrics = [prompt.lyrics]
         assert len(tags) == len(lyrics), "There must be same amount of tags and lyrics"
         bsz = len(tags)
 
         self.load_lora(lora_name_or_path, lora_weight)
+
+        if input_latents is None:
+            if duration <= 0:
+                duration = random.uniform(30.0, 240.0)
+                logging.info(f"Random audio duration: {duration}")
+
+            frame_length = int(duration * 44100 / 512 / 8)
+            input_latents = randn_tensor(
+                shape=(1, 8, 16, frame_length),
+                generator=None,
+                device=self.device,
+                dtype=self.dtype,
+            )
 
         encoder_text_hidden_states, text_attention_mask = self.get_text_embeddings(tags)
 
@@ -368,45 +378,9 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
         pred_wavs = self.latents2audio(latents=diffusion_out.trajectory[-1])
         self.cleanup_memory()
 
+        for i, wav in enumerate(pred_wavs):
+            self.writer.add_audio(f"audio_{i}", wav)
         if save_path:
             self.save_pred_wavs(pred_wavs, save_path)
 
         return diffusion_out
-
-    def text_to_music(
-        self,
-        prompt: Prompt,
-        diffusion_params: DiffusionParams,
-        duration: int = -1,
-        input_latents: torch.Tensor | None = None,
-        null_embeds_per_step: List[torch.Tensor] | None = None,
-        lora_name_or_path: str = "none",
-        lora_weight: float = 1.0,
-        save_path: str | None = None,
-    ) -> DiffusionOut:
-        tags = [prompt.tags]
-        lyrics = [prompt.lyrics]
-
-        if input_latents is None:
-            if duration <= 0:
-                duration = random.uniform(30.0, 240.0)
-                logging.info(f"Random audio duration: {duration}")
-
-            frame_length = int(duration * 44100 / 512 / 8)
-            input_latents = randn_tensor(
-                shape=(1, 8, 16, frame_length),
-                generator=None,
-                device=self.device,
-                dtype=self.dtype,
-            )
-
-        return self.forward(
-            input_latents,
-            null_embeds_per_step,
-            tags,
-            lyrics,
-            diffusion_params,
-            lora_name_or_path=lora_name_or_path,
-            lora_weight=lora_weight,
-            save_path=save_path,
-        )

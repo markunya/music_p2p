@@ -7,16 +7,12 @@ from diffusers.pipelines.stable_diffusion_3.pipeline_stable_diffusion_3 import (
 )
 
 from src.logging import utils as logging
+from src.logging.writer import BaseWriter, DummyWriter
 from src.nti.build_pivot_trajectory import build_pivot_trajectory
 from src.nti.null_text_inversion import NullTextOptimization
 from src.pipelines.base_p2p_pipeline import BaseAceStepP2PEditPipeline
 from src.schedulers import get_direct_scheduler
-from src.utils.structures import (
-    DiffusionOut,
-    DiffusionParams,
-    InvertedMusicData,
-    Prompt,
-)
+from src.utils.structures import DiffusionParams, InvertedMusicData, Prompt
 
 
 def music2noise(
@@ -26,6 +22,7 @@ def music2noise(
     diffusion_params: DiffusionParams,
     nti: NullTextOptimization,
     debug_mode: bool = False,
+    writer: BaseWriter = DummyWriter(),
     audio_save_path: str = None,
 ) -> InvertedMusicData:
     device = pipeline.ace_step_transformer.device
@@ -49,7 +46,6 @@ def music2noise(
         lyric_token_ids=lyric_token_idx,
         lyric_mask=lyric_mask,
         diffusion_params=diffusion_params,
-        random_generators=None,
     )
     pivot_trajectory = building_pivot_out.trajectory
 
@@ -65,12 +61,16 @@ def music2noise(
             lyric_token_ids=lyric_token_idx,
             lyric_mask=lyric_mask,
             diffusion_params=diffusion_params_no_guidance,
-            random_generators=None,
         )
 
-        logging.info(
-            f"MAE after building pivot (no guidance): {(diffusion_out.trajectory[0] - latents).abs().mean()}"
+        logging.debug(
+            f"MAE after building pivot (no guidance): {(diffusion_out.trajectory[-1] - latents).abs().mean()}"
         )
+
+        pred_wavs = pipeline.latents2audio(diffusion_out.trajectory[-1])
+        pipeline.save_pred_wavs(pred_wavs, audio_save_path)
+        for i, wav in enumerate(pred_wavs):
+            writer.add_audio(f"m2n_no_guidance_{i}", wav.unsqueeze(0))
 
     scheduler = get_direct_scheduler(diffusion_params.scheduler_type)
     timesteps, _ = retrieve_timesteps(
@@ -101,16 +101,17 @@ def music2noise(
             lyric_token_ids=lyric_token_idx,
             lyric_mask=lyric_mask,
             diffusion_params=diffusion_params,
-            random_generators=None,
             null_embeddings_per_step=null_embeddings_per_step,
         )
 
         logging.debug(
-            f"MAE after null text optimization (guidance): {(diffusion_out.trajectory[0] - latents).abs().mean()}"
+            f"MAE after null text optimization (guidance): {(diffusion_out.trajectory[-1] - latents).abs().mean()}"
         )
 
         pred_wavs = pipeline.latents2audio(diffusion_out.trajectory[-1])
         pipeline.save_pred_wavs(pred_wavs, audio_save_path)
+        for i, wav in enumerate(pred_wavs):
+            writer.add_audio(f"m2n_with_guidance_{i}", wav.unsqueeze(0))
 
     return InvertedMusicData(
         noise=pivot_trajectory[0],

@@ -8,6 +8,7 @@ import cattrs
 import torch
 from omegaconf import MISSING
 
+from src.logging.writer import CometMLConfig
 from src.schedulers import SchedulerType
 
 T = TypeVar("T")
@@ -42,6 +43,7 @@ class BaseScriptConfig:
     exp_name: str = MISSING
     debug_mode: bool = False
     seed: int = 1
+    writer: CometMLConfig | None = None
 
 
 @dataclass
