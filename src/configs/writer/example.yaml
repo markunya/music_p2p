@@ -1,4 +1,4 @@
 project_name: "music_p2p"
 workspace: null
-run_name: "testing"
+run_name: ${exp_name}
 mode: Online

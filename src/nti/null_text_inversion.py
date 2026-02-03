@@ -86,9 +86,6 @@ class NullTextOptimization:
         lyric_token_ids,
         lyric_mask,
         *,
-        num_inner_steps=15,
-        lr=1e-2,
-        epsilon=1e-7,
         guidance_params: GuidanceParams,
         omega_scale=0.0,
     ) -> list[torch.Tensor]:
@@ -159,9 +156,11 @@ class NullTextOptimization:
                 continue
 
             null_emb = base_null_emb.clone().detach().requires_grad_(True)
-            optimizer = Adam([null_emb], lr=lr)  # lr * (1 - i / (2 * len(timesteps))) ?
+            optimizer = Adam(
+                [null_emb], lr=self._lr
+            )  # lr * (1 - i / (2 * len(timesteps))) ?
 
-            for j in range(num_inner_steps):
+            for j in range(self._num_inner_steps):
                 self._reset_scheduler_at_t(scheduler, t)
 
                 noise_null = self._model.decode(
@@ -195,7 +194,7 @@ class NullTextOptimization:
                 loss.backward()
                 optimizer.step()
 
-                if loss.item() < epsilon:
+                if loss.item() < self._epsilon:
                     break
 
             if self._debug_mode:

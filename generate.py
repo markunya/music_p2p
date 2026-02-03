@@ -41,6 +41,7 @@ def main(cfg: GenerateConfig):
         data = torch.load(cfg.latents_path)
         input_latents = data["noise"]
         null_embeds_per_step = data["null_embeds_per_step"]
+        logging.info("Successfully loaded input latents")
 
     exp_dir = setup_exp_dir(cfg)
 

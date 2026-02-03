@@ -30,10 +30,10 @@ def build_pivot_trajectory(
         device=model.device,
         timesteps=None,
     )
-    # print(timesteps)
-    # timesteps[0] = timesteps[-1]
-    # timesteps = torch.roll(timesteps, shifts=-1)
-    # print(timesteps)
+    print(timesteps)
+    timesteps[0] = timesteps[-1]
+    timesteps = torch.roll(timesteps, shifts=-1)
+    print(timesteps)
 
     attention_mask = torch.ones(
         bsz,
