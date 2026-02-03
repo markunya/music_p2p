@@ -29,6 +29,7 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
         controller: AttentionControl | None = None,
         tags_max_length: int = 128,
         lyrics_max_length: int = 512,
+        sample_rate=48_000,
         writer: BaseWriter = DummyWriter(),
         blocks_to_inject_idxs=None,
         dtype="float32",
@@ -45,6 +46,7 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
 
         self.debug_mode = debug_mode
         self.writer = writer
+        self.sample_rate = sample_rate
 
         self.blocks_to_inject_idxs = blocks_to_inject_idxs
         if self.blocks_to_inject_idxs is None:
@@ -281,8 +283,11 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
 
     @cpu_offload("music_dcae")
     def latents2audio(
-        self, latents, target_wav_duration_second=30, sample_rate=16000
+        self, latents, target_wav_duration_second=30, sample_rate=None
     ) -> List[torch.Tensor]:
+        if sample_rate is None:
+            sample_rate = self.sample_rate
+
         pred_latents = latents
         with torch.no_grad():
             if self.overlapped_decode and target_wav_duration_second > 48:
@@ -295,8 +300,11 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
         return pred_wavs
 
     def save_pred_wavs(
-        self, pred_wavs: List[torch.Tensor], save_path, format="wav", sample_rate=16000
+        self, pred_wavs: List[torch.Tensor], save_path, format="wav", sample_rate=None
     ):
+        if sample_rate is None:
+            sample_rate = self.sample_rate
+
         output_audio_paths = []
         pred_wavs = [pred_wav.cpu().float() for pred_wav in pred_wavs]
         for i in tqdm(range(len(pred_wavs))):

@@ -19,7 +19,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 @dataclass
 class InvertMusicConfig(BaseScriptConfig):
-    learning_rate: float = 1e-3
+    learning_rate: float = 1e-2
     num_inner_steps: int = 15
     epsilon: float = 1e-7
 

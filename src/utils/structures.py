@@ -43,6 +43,7 @@ class BaseScriptConfig:
     exp_name: str = MISSING
     debug_mode: bool = False
     seed: int = 1
+    sample_rate: int = 48_000
     writer: CometMLConfig | None = None
 
 

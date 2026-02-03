@@ -160,7 +160,7 @@ class CometMLWriter(BaseWriter):
         """
         self.exp.log_image(image_data=image, name=image_name, step=self.step)
 
-    def add_audio(self, audio_name, audio, sample_rate=16000):
+    def add_audio(self, audio_name, audio, sample_rate=48_000):
         """
         Log an audio to the experiment tracker.
 

@@ -2,7 +2,7 @@ import copy
 
 import torch
 import torch.nn.functional as F
-from torch.optim import Adam
+from torch.optim import AdamW
 from tqdm import tqdm
 
 from src.logging import utils as logging
@@ -151,13 +151,12 @@ class NullTextOptimization:
                         sample=latent_cur,
                         return_dict=False,
                         omega=omega_scale,
-                        generator=None,
                     )[0]
                 continue
 
             null_emb = base_null_emb.clone().detach().requires_grad_(True)
-            optimizer = Adam(
-                [null_emb], lr=self._lr
+            optimizer = AdamW(
+                [null_emb], lr=self._lr, weight_decay=0.1
             )  # lr * (1 - i / (2 * len(timesteps))) ?
 
             for j in range(self._num_inner_steps):
