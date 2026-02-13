@@ -1,7 +1,20 @@
 import torch
-from acestep.apg_guidance import cfg_forward
+from acestep.apg_guidance import cfg_forward, apg_forward
 
 from src.utils.structures import CfgType, GuidanceParams
+
+class MomentumBuffer:
+    def __init__(self, momentum: float = -0.75):
+        self.momentum = momentum
+        self.running_average = torch.tensor(0)
+
+    def update(self, update_value: torch.Tensor):
+        new_average = self.momentum * self.running_average
+        self.running_average = update_value + new_average
+
+    def detach(self):
+        self.running_average = self.running_average.clone().detach()
+        return self
 
 
 def mix_guidance(
@@ -9,7 +22,7 @@ def mix_guidance(
     noise_cond: torch.Tensor,
     noise_null: torch.Tensor,
     gscale: float,
-    # momentum_buffer=None,
+    momentum_buffer=None,
     # i=None,
 ):
     match cfg_type:
@@ -19,13 +32,13 @@ def mix_guidance(
                 uncond_output=noise_null,
                 cfg_strength=gscale,
             )
-        # case CfgType.APG:
-        #     return apg_forward(
-        #         pred_cond=noise_cond,
-        #         pred_uncond=noise_null,
-        #         guidance_scale=gscale,
-        #         momentum_buffer=momentum_buffer,
-        #     )
+        case CfgType.APG:
+            return apg_forward(
+                pred_cond=noise_cond,
+                pred_uncond=noise_null,
+                guidance_scale=gscale,
+                momentum_buffer=momentum_buffer,
+            )
         # case CfgType.CFG_STAR:
         #     return cfg_zero_star(
         #         noise_pred_with_cond=noise_cond,

@@ -145,6 +145,7 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
         logging.info("Diffusion params:")
         logging.log_structure(diffusion_params)
 
+        momentum_buffer = diffusion_utils.MomentumBuffer()
         guidance_params = diffusion_params.guidance_params
         if (
             guidance_params.guidance_scale == 0.0
@@ -247,6 +248,7 @@ class BaseAceStepP2PEditPipeline(ACEStepPipeline):
                     noise_cond=noise_pred_with_cond,
                     noise_null=noise_pred_uncond,
                     gscale=current_guidance_scale,
+                    momentum_buffer=momentum_buffer
                 )
 
             else:

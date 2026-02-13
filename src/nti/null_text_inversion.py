@@ -9,6 +9,8 @@ from src.logging import utils as logging
 from src.logging.writer import BaseWriter, DummyWriter
 from src.utils.diffusion_utils import (
     GuidanceParams,
+    MomentumBuffer,
+    CfgType,
     compute_current_guidance,
     mix_guidance,
 )
@@ -66,15 +68,6 @@ class NullTextOptimization:
         if hasattr(scheduler, "sample"):
             scheduler.sample = None
 
-    def _mb_clone_detached(self, mb):
-        if mb is None:
-            return None
-        snap = copy.deepcopy(mb)
-        for k, v in snap.__dict__.items():
-            if torch.is_tensor(v):
-                snap.__dict__[k] = v.detach().clone()
-        return snap
-
     def run(
         self,
         trajectory,
@@ -89,6 +82,8 @@ class NullTextOptimization:
         guidance_params: GuidanceParams,
         omega_scale=0.0,
     ) -> list[torch.Tensor]:
+        momentum_buffer = MomentumBuffer()
+
         device = self._model.device
         dtype = self._model.dtype
 
@@ -176,6 +171,7 @@ class NullTextOptimization:
                     noise_cond=noise_cond,
                     noise_null=noise_null,
                     gscale=cur_scale,
+                    momentum_buffer=momentum_buffer.detach()
                 )
 
                 lat_prev = scheduler.step(
